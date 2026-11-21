@@ -241,7 +241,7 @@ export default function App() {
           <div
             role="tabpanel"
             aria-hidden={abaAtiva !== 'registrar'}
-            className={abaAtiva === 'registrar' ? 'space-y-2' : 'hidden'}
+            className={abaAtiva === 'registrar' ? 'space-y-0' : 'hidden'}
           >
             {/* 2. Resumo do turno */}
             <section

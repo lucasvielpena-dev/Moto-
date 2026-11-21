@@ -495,7 +495,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
         : 'Pronto para rodar';
 
   return (
-    <section aria-labelledby="titulo-odometro" className="neu-card p-2.5 sm:p-4">
+    <section aria-labelledby="titulo-odometro" className="neu-card p-2 sm:p-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-3 min-w-0">
           <div className="icon-tile text-[var(--rota-accent)]">
@@ -549,7 +549,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
 
       {/* Leitura principal da distância */}
       <div className="my-2 sm:my-3 flex items-baseline justify-center gap-2 text-center">
-        <span className="text-3xl sm:text-4xl font-bold tracking-[-0.03em] text-[var(--rota-text)] tabular-nums">
+        <span className="text-2xl sm:text-3xl font-bold tracking-[-0.03em] text-[var(--rota-text)] tabular-nums">
           {formatarKm(kmAtual)}
         </span>
         <span className="text-lg font-semibold text-[var(--rota-accent)]">km</span>

@@ -82,10 +82,9 @@
   background-color: var(--rota-bg);
 }
 
-/* Cartão principal: superfície mais clara, linha sutil e raio maior */
+/* Cartão principal: superfície mais clara, raio maior e sem borda — cards formam um bloco único */
 .neu-card {
   background-color: var(--rota-surface);
-  border: 1px solid var(--rota-line);
   border-radius: var(--rota-r-lg);
 }
 
