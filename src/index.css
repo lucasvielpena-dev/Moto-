@@ -27,7 +27,7 @@
 }
 
 :root {
-  /* Paleta — delivery (aiqfome) + finance (Nubank/Monzo/PicPay) */
+  /* Paleta — financeiro (Monzo — azul escuro #112231) */
   --rota-bg: #0E131D;
   --rota-surface: #171E2B;
   --rota-surface-2: #1F2736;
@@ -36,11 +36,11 @@
   --rota-line: rgba(255, 255, 255, 0.07);
   --rota-text: #F5F7FA;
   --rota-text-soft: #9AA6B8;
-  --rota-accent: #8D0DE3;           /* purple — brand core Nubank */
-  --rota-accent-soft: #5D0599;       /* S1 — hover */
-  --rota-accent-strong: #AF63FD;     /* T1 — progress */
-  --rota-accent-muted: rgba(141, 13, 227, 0.2);
-  --rota-accent-tint: rgba(141, 13, 227, 0.3);
+  --rota-accent: #112231;           /* azul escuro — Monzo (#112231) */
+  --rota-accent-soft: #0C1A2E;       /* hover — mais escuro */
+  --rota-accent-strong: #2975A8;     /* progress — azul claro */
+  --rota-accent-muted: rgba(17, 34, 49, 0.25);
+  --rota-accent-tint: rgba(17, 34, 49, 0.35);
   --rota-success: #35D39A;
   --rota-danger: #F07878;
   --rota-danger-text: #F48C8C;
@@ -131,7 +131,7 @@
 }
 
 .neu-inset:focus-within {
-  box-shadow: 0 0 0 2px rgba(141, 13, 227, 0.55);
+  box-shadow: 0 0 0 2px rgba(17, 34, 49, 0.6);
 }
 
 /* Botões secundários */
