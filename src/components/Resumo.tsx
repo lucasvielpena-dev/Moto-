@@ -493,7 +493,7 @@ export const Resumo: React.FC<ResumoProps> = ({
                   tick={{
                     fill: 'var(--rota-text-soft)',
                     fontSize: 12,
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Nunito, system-ui, sans-serif',
                   }}
                 />
                 <YAxis
@@ -503,7 +503,7 @@ export const Resumo: React.FC<ResumoProps> = ({
                   tick={{
                     fill: 'var(--rota-text-soft)',
                     fontSize: 12,
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Nunito, system-ui, sans-serif',
                   }}
                   tickFormatter={(v: number) =>
                     v === 0 ? 'R$0' : `R$${Math.round(v)}`

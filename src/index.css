@@ -1,10 +1,33 @@
 @import "tailwindcss";
 
 /* ======================== SISTEMA DE DESIGN ========================
-   Paleta padronizada (tokens CSS), escala de raio e tipografia,
-   aplicados em todas as telas do app — acessíveis via var().         */
+   Baseado em referências de apps de delivery (aiqfome) e de
+   finanças (Nubank, Monzo, PicPay): paleta, raio, tipografia e
+   padrões de aplicativo minimalista e padronizado.                  */
+
+@font-face {
+  font-family: 'Nunito';
+  src: url('/fonts/Nunito-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nunito';
+  src: url('/fonts/Nunito-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nunito';
+  src: url('/fonts/Nunito-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
-  /* Paleta */
+  /* Paleta — delivery (aiqfome) + finance (Nubank/Monzo/PicPay) */
   --rota-bg: #0E131D;
   --rota-surface: #171E2B;
   --rota-surface-2: #1F2736;
@@ -13,14 +36,12 @@
   --rota-line: rgba(255, 255, 255, 0.07);
   --rota-text: #F5F7FA;
   --rota-text-soft: #9AA6B8;
-  --rota-accent: #2672B5;
-  --rota-accent-soft: #3A86D0;
-  --rota-accent-strong: #3186D1;
-  --rota-accent-muted: rgba(58, 134, 208, 0.2);
+  --rota-accent: #8D0DE3;           /* purple — brand core Nubank */
+  --rota-accent-soft: #5D0599;       /* S1 — hover */
+  --rota-accent-strong: #AF63FD;     /* T1 — progress */
+  --rota-accent-muted: rgba(141, 13, 227, 0.2);
+  --rota-accent-tint: rgba(141, 13, 227, 0.3);
   --rota-success: #35D39A;
-  --rota-success-strong: rgba(53, 211, 154, 0.25);
-  --rota-success-soft: rgba(53, 211, 154, 0.18);
-  --rota-success-tint: rgba(53, 211, 154, 0.14);
   --rota-danger: #F07878;
   --rota-danger-text: #F48C8C;
   --rota-danger-soft: rgba(240, 120, 120, 0.18);
@@ -34,7 +55,7 @@
   --rota-r-lg: 24px;
 
   /* Tipografia */
-  --rota-font: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --rota-font: 'Nunito', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 @layer base {
@@ -110,7 +131,7 @@
 }
 
 .neu-inset:focus-within {
-  box-shadow: 0 0 0 2px rgba(38, 114, 181, 0.55);
+  box-shadow: 0 0 0 2px rgba(141, 13, 227, 0.55);
 }
 
 /* Botões secundários */
