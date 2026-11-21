@@ -130,7 +130,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
   };
 
   const campoValor = (
-    <div className="neu-inset flex items-center rounded-2xl px-4 min-h-[48px]">
+    <div className="neu-inset flex items-center rounded-2xl px-4 min-h-[40px]">
       <span
         className={`mr-2 text-sm font-semibold ${
           ehGanho ? 'text-[var(--rota-success)]' : 'text-[var(--rota-danger-text)]'
@@ -157,7 +157,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
             setValorTexto('');
             setErro(null);
           }}
-          className="ml-2 inline-flex min-h-[44px] items-center px-2 -mr-2 rounded-xl text-xs font-semibold text-[var(--rota-text-soft)] hover:text-[var(--rota-text)] shrink-0"
+          className="ml-2 inline-flex min-h-10 items-center px-2 -mr-2 rounded-xl text-xs font-semibold text-[var(--rota-text-soft)] hover:text-[var(--rota-text)] shrink-0"
         >
           Limpar
         </button>
@@ -178,7 +178,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
             aria-pressed={selecionado}
             aria-label={`Selecionar R$ ${valor}`}
             onClick={() => handleSelecionarAtalho(valor)}
-            className={`min-h-[44px] rounded-2xl px-1.5 text-xs font-semibold tabular-nums whitespace-nowrap transition-colors duration-150 active:scale-[0.98] ${
+            className={`min-h-10 rounded-2xl px-1.5 text-xs font-semibold tabular-nums whitespace-nowrap transition-colors duration-150 active:scale-[0.98] ${
               selecionado
                 ? ehGanho
                   ? 'bg-[var(--rota-success-soft)] text-[var(--rota-success)] ring-1 ring-[var(--rota-success-soft)]'
@@ -194,7 +194,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
   );
 
   return (
-    <section aria-labelledby="titulo-lancamento" className="neu-card p-4 sm:p-6">
+    <section aria-labelledby="titulo-lancamento" className="neu-card p-2.5 sm:p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3 min-w-0">
           <div className="icon-tile text-[var(--rota-accent)]">
@@ -217,7 +217,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
         <div className="flex items-center gap-2 shrink-0 ml-auto">
           {confirmado ? (
             <span
-              className={`inline-flex min-h-[44px] items-center gap-1 text-xs font-semibold whitespace-nowrap ${
+              className={`inline-flex min-h-10 items-center gap-1 text-xs font-semibold whitespace-nowrap ${
                 confirmado.ehGanho
                   ? 'text-[var(--rota-success)]'
                   : 'text-[var(--rota-danger-text)]'
@@ -231,7 +231,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
               type="button"
               aria-pressed={modoRapido}
               onClick={handleAlternarModoRapido}
-              className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl px-3 text-xs font-semibold whitespace-nowrap transition-colors duration-150 active:scale-[0.98] ${
+              className={`inline-flex min-h-10 items-center gap-1.5 rounded-2xl px-3 text-xs font-semibold whitespace-nowrap transition-colors duration-150 active:scale-[0.98] ${
                 modoRapido
                   ? 'bg-[var(--rota-accent-muted)] text-[var(--rota-accent)]'
                   : 'neu-btn-secondary text-[var(--rota-text-soft)] hover:text-[var(--rota-text)]'
@@ -286,7 +286,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="mt-3.5 space-y-3.5">
+      <form onSubmit={handleSubmit} className="mt-3 space-y-3">
         {/* 2. Plataforma ou Categoria */}
         <div>
           <span className="block text-xs font-medium text-[var(--rota-text-soft)] mb-2">
@@ -303,7 +303,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
                       type="button"
                       aria-pressed={ativo}
                       onClick={() => setPlataforma(item)}
-                      className={`min-h-[44px] rounded-2xl px-2 sm:px-3 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1 sm:gap-1.5 transition-colors duration-150 active:scale-[0.98] ${
+                      className={`min-h-10 rounded-2xl px-2 sm:px-3 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1 sm:gap-1.5 transition-colors duration-150 active:scale-[0.98] ${
                         ativo
                           ? 'bg-[var(--rota-success-soft)] text-[var(--rota-success)] ring-1 ring-[var(--rota-success-soft)]/50'
                           : 'bg-[var(--rota-surface-2)] text-[var(--rota-text-soft)] hover:text-[var(--rota-text)]'
@@ -324,7 +324,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
                       type="button"
                       aria-pressed={ativo}
                       onClick={() => setCategoriaGasto(item)}
-                      className={`min-h-[44px] rounded-2xl px-2 sm:px-3 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1 sm:gap-1.5 transition-colors duration-150 active:scale-[0.98] ${
+                      className={`min-h-10 rounded-2xl px-2 sm:px-3 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1 sm:gap-1.5 transition-colors duration-150 active:scale-[0.98] ${
                         ativo
                           ? 'bg-[var(--rota-danger-soft)] text-[var(--rota-danger-text)] ring-1 ring-[var(--rota-danger-soft)]/50'
                           : 'bg-[var(--rota-surface-2)] text-[var(--rota-text-soft)] hover:text-[var(--rota-text)]'
@@ -353,7 +353,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
               type="button"
               aria-expanded={mostrarObs}
               onClick={() => setMostrarObs((prev) => !prev)}
-              className="inline-flex min-h-[44px] -my-2.5 items-center gap-1 px-2 -mr-2 rounded-xl text-xs font-medium text-[var(--rota-accent)] hover:text-[var(--rota-text)] transition-colors"
+              className="inline-flex min-h-10 -my-2.5 items-center gap-1 px-2 -mr-2 rounded-xl text-xs font-medium text-[var(--rota-accent)] hover:text-[var(--rota-text)] transition-colors"
             >
               <MessageSquarePlus className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
               {mostrarObs ? 'Ocultar observação' : 'Observação'}
@@ -377,7 +377,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
             >
               Observação (opcional)
             </label>
-            <div className="neu-inset flex items-center rounded-2xl px-4 min-h-[48px]">
+            <div className="neu-inset flex items-center rounded-2xl px-4 min-h-[40px]">
               <input
                 id="input-observacao-lancamento"
                 type="text"
@@ -399,7 +399,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
         <div className="pt-1">
           <button
             type="submit"
-            className="btn-primary-glow flex w-full min-h-[48px] items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
+            className="btn-primary-glow flex w-full min-h-[40px] items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
           >
             <PlusCircle className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
             Registrar lançamento

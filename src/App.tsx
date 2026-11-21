@@ -214,10 +214,10 @@ export default function App() {
     resumoHoje.gastos === 0 ? 'Lucro estimado' : 'Lucro';
 
   return (
-    <div className="app-canvas min-h-screen w-full overflow-x-hidden px-3 sm:px-4 pt-4 pb-[calc(7rem+env(safe-area-inset-bottom))]">
+    <div className="app-canvas min-h-screen w-full overflow-x-hidden px-3 sm:px-4 pt-3 pb-[calc(7rem+env(safe-area-inset-bottom))]">
       <div className="relative z-10 mx-auto w-full max-w-[540px]">
         {/* 1. Cabeçalho compacto */}
-        <header className="mb-4 flex items-center justify-between gap-3">
+        <header className="mb-2 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <img
               src="/icon.svg"
@@ -241,26 +241,26 @@ export default function App() {
           <div
             role="tabpanel"
             aria-hidden={abaAtiva !== 'registrar'}
-            className={abaAtiva === 'registrar' ? 'space-y-4' : 'hidden'}
+            className={abaAtiva === 'registrar' ? 'space-y-2' : 'hidden'}
           >
             {/* 2. Resumo do turno */}
             <section
-              aria-label="Turno de hoje"
-              className="neu-card p-4 sm:p-6"
+              aria-label="Turno de Hoje"
+              className="neu-card p-2 sm:p-4"
             >
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <h2 className="card-title">Turno de hoje</h2>
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <h2 className="card-title">Turno de Hoje</h2>
                 <button
                   type="button"
                   onClick={() => handleTrocarAba('resumo')}
-                  className="inline-flex min-h-[44px] -my-2.5 items-center px-2 -mr-2 rounded-xl text-xs font-semibold text-[var(--rota-accent)] hover:text-[var(--rota-text)] transition-colors whitespace-nowrap"
+                  className="inline-flex min-h-[44px] -my-2 items-center px-2 -mr-2 rounded-xl text-xs font-semibold text-[var(--rota-accent)] hover:text-[var(--rota-text)] transition-colors whitespace-nowrap"
                 >
                   Ver resumo
                 </button>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div className="neu-tile px-3 py-2.5">
+                <div className="neu-tile px-3 py-1.5">
                   <span className="block text-xs font-medium text-[var(--rota-text-soft)]">
                     Receita
                   </span>
@@ -269,7 +269,7 @@ export default function App() {
                   </span>
                 </div>
 
-                <div className="neu-tile px-3 py-2.5">
+                <div className="neu-tile px-3 py-1.5">
                   <span className="block text-xs font-medium text-[var(--rota-text-soft)]">
                     Despesas
                   </span>
@@ -284,7 +284,7 @@ export default function App() {
                   </span>
                 </div>
 
-                <div className="neu-tile px-3 py-2.5">
+                <div className="neu-tile px-3 py-1.5">
                   <span className="block text-xs font-medium text-[var(--rota-text-soft)]">
                     {rotuloLucroHoje}
                   </span>
@@ -301,7 +301,7 @@ export default function App() {
                   </span>
                 </div>
 
-                <div className="neu-tile px-3 py-2.5">
+                <div className="neu-tile px-3 py-1.5">
                   <span className="block text-xs font-medium text-[var(--rota-text-soft)]">
                     Distância
                   </span>
@@ -312,7 +312,7 @@ export default function App() {
               </div>
 
               {/* Barra de progresso e meta logo abaixo dos indicadores */}
-              <div className="mt-3 pt-3 border-t border-[var(--rota-line)]">
+              <div className="mt-2 pt-2 border-t border-[var(--rota-line)]">
                 <div
                   role="progressbar"
                   aria-label="Progresso da meta diária"
@@ -375,7 +375,7 @@ export default function App() {
 
           {/* Aba 2: Resumo financeiro e metas */}
           {abaAtiva === 'resumo' && (
-            <div role="tabpanel" className="space-y-4">
+            <div role="tabpanel" className="space-y-3">
               <Resumo
                 periodo={periodo}
                 onMudarPeriodo={setPeriodo}
@@ -390,7 +390,7 @@ export default function App() {
 
           {/* Aba 3: Histórico, manutenção e backup */}
           {abaAtiva === 'historico' && (
-            <div role="tabpanel" className="space-y-4">
+            <div role="tabpanel" className="space-y-3">
               <ListaLancamentos
                 periodo={periodo}
                 onMudarPeriodo={setPeriodo}

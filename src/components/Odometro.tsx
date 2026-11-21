@@ -150,11 +150,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
   const [tempoSegundos, setTempoSegundos] = useState<number>(() =>
     carregarTempoOdometroSegundos()
   );
-  const [status, setStatus] = useState<StatusOdometro>(() =>
-    carregarKmEmAndamento() > 0 || carregarTempoOdometroSegundos() > 0
-      ? 'paused'
-      : 'idle'
-  );
+  const [status, setStatus] = useState<StatusOdometro>(() => 'running');
   const [precisaoMetros, setPrecisaoMetros] = useState<number | null>(null);
   const [velocidadeKmh, setVelocidadeKmh] = useState<number | null>(null);
   const [aguardandoSinal, setAguardandoSinal] = useState<boolean>(false);
@@ -388,6 +384,13 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
     };
   }, [liberarWakeLock, pararWatchGps, solicitarWakeLock]);
 
+  // Odômetro inicia rodando assim que o app abre — o dia em andamento
+  // segue contando mesmo sem uma corrida separada agora
+  useEffect(() => {
+    iniciarWatchGps();
+    void solicitarWakeLock();
+  }, [iniciarWatchGps, solicitarWakeLock]);
+
   const handleIniciarOuContinuar = () => {
     iniciarWatchGps();
     void solicitarWakeLock();
@@ -402,6 +405,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
   const handleSalvarTrajetoGps = () => {
     if (kmAtual <= 0) return;
     const kmParaSalvar = Number(kmAtual.toFixed(2));
+    const estavaRodando = statusRef.current === 'running';
     pararWatchGps();
     void liberarWakeLock();
     onSalvarTrajeto(
@@ -414,7 +418,11 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
     setPrecisaoMetros(null);
     setVelocidadeKmh(null);
     setErroGps(null);
-    setStatus('idle');
+    if (estavaRodando) {
+      // o odômetro segue rodando depois de registrar o trajeto
+      iniciarWatchGps();
+      void solicitarWakeLock();
+    }
     mostrarFeedback('Trajeto salvo!');
   };
 
@@ -487,7 +495,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
         : 'Pronto para rodar';
 
   return (
-    <section aria-labelledby="titulo-odometro" className="neu-card p-4 sm:p-6">
+    <section aria-labelledby="titulo-odometro" className="neu-card p-2.5 sm:p-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-3 min-w-0">
           <div className="icon-tile text-[var(--rota-accent)]">
@@ -540,8 +548,8 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
       </div>
 
       {/* Leitura principal da distância */}
-      <div className="my-4 sm:my-5 flex items-baseline justify-center gap-2 text-center">
-        <span className="text-5xl sm:text-6xl font-bold tracking-[-0.03em] text-[var(--rota-text)] tabular-nums">
+      <div className="my-2 sm:my-3 flex items-baseline justify-center gap-2 text-center">
+        <span className="text-3xl sm:text-4xl font-bold tracking-[-0.03em] text-[var(--rota-text)] tabular-nums">
           {formatarKm(kmAtual)}
         </span>
         <span className="text-lg font-semibold text-[var(--rota-accent)]">km</span>
@@ -597,7 +605,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
           <button
             type="button"
             onClick={handlePausar}
-            className="neu-btn-secondary flex-1 min-w-[116px] min-h-[48px] flex items-center justify-center gap-1.5 sm:gap-2 rounded-2xl px-3 sm:px-4 text-xs sm:text-sm font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
+            className="neu-btn-secondary flex-1 min-w-[116px] min-h-[40px] flex items-center justify-center gap-1.5 sm:gap-2 rounded-2xl px-3 sm:px-4 text-xs sm:text-sm font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
           >
             <Pause className="h-4 w-4 shrink-0 text-[var(--rota-accent)]" strokeWidth={1.75} aria-hidden="true" />
             Pausar
@@ -606,7 +614,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
           <button
             type="button"
             onClick={handleIniciarOuContinuar}
-            className="btn-primary-glow flex-1 min-w-[116px] min-h-[48px] flex items-center justify-center gap-1.5 sm:gap-2 rounded-2xl px-3 sm:px-4 text-xs sm:text-sm font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
+            className="btn-primary-glow flex-1 min-w-[116px] min-h-[40px] flex items-center justify-center gap-1.5 sm:gap-2 rounded-2xl px-3 sm:px-4 text-xs sm:text-sm font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
           >
             <Play className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
             {status === 'paused' ? 'Continuar' : 'Iniciar'}
@@ -617,7 +625,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
           type="button"
           onClick={handleSalvarTrajetoGps}
           disabled={kmAtual <= 0}
-          className={`min-h-[48px] min-w-[124px] flex-1 flex items-center justify-center gap-1.5 sm:gap-2 rounded-2xl px-3 sm:px-4 text-xs sm:text-sm font-semibold whitespace-nowrap transition-colors duration-150 ${
+          className={`min-h-[40px] min-w-[124px] flex-1 flex items-center justify-center gap-1.5 sm:gap-2 rounded-2xl px-3 sm:px-4 text-xs sm:text-sm font-semibold whitespace-nowrap transition-colors duration-150 ${
             kmAtual > 0
               ? status === 'running'
                 ? 'btn-primary-glow text-[var(--rota-text)] active:scale-[0.98]'
@@ -682,7 +690,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
 
           {modoManual === 'distancia' ? (
             <div className="flex items-center gap-2">
-              <div className="neu-inset flex flex-1 items-center rounded-2xl px-4 min-h-[48px]">
+              <div className="neu-inset flex flex-1 items-center rounded-2xl px-4 min-h-[40px]">
                 <input
                   id="input-km-manual"
                   type="text"
@@ -699,7 +707,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
               </div>
               <button
                 type="submit"
-                className="btn-primary-glow flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-2xl px-4 text-xs font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
+                className="btn-primary-glow flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-2xl px-4 text-xs font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
               >
                 <Plus className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                 Adicionar
@@ -715,7 +723,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
                   >
                     Km inicial
                   </label>
-                  <div className="neu-inset flex items-center rounded-2xl px-3.5 min-h-[48px]">
+                  <div className="neu-inset flex items-center rounded-2xl px-3.5 min-h-[40px]">
                     <input
                       id="input-km-inicial"
                       type="text"
@@ -738,7 +746,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
                   >
                     Km final
                   </label>
-                  <div className="neu-inset flex items-center rounded-2xl px-3.5 min-h-[48px]">
+                  <div className="neu-inset flex items-center rounded-2xl px-3.5 min-h-[40px]">
                     <input
                       id="input-km-final"
                       type="text"
