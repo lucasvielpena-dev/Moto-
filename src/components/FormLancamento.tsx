@@ -133,7 +133,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
     <div className="neu-inset flex items-center rounded-2xl px-4 min-h-[48px]">
       <span
         className={`mr-2 text-sm font-semibold ${
-          ehGanho ? 'text-[#35D39A]' : 'text-[#F48C8C]'
+          ehGanho ? 'text-[var(--rota-success)]' : 'text-[var(--rota-danger-text)]'
         }`}
       >
         R$
@@ -148,7 +148,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
           if (erro) setErro(null);
         }}
         placeholder={modoRapido ? 'Outro valor (ex: 14,50)' : '0,00'}
-        className="w-full bg-transparent text-base font-semibold text-[#F5F7FA] placeholder:text-[#9AA6B8]/60 focus:outline-none tabular-nums"
+        className="w-full bg-transparent text-base font-semibold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
       />
       {valorTexto && (
         <button
@@ -157,7 +157,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
             setValorTexto('');
             setErro(null);
           }}
-          className="ml-2 inline-flex min-h-[44px] items-center px-2 -mr-2 rounded-xl text-xs font-semibold text-[#9AA6B8] hover:text-[#F5F7FA] shrink-0"
+          className="ml-2 inline-flex min-h-[44px] items-center px-2 -mr-2 rounded-xl text-xs font-semibold text-[var(--rota-text-soft)] hover:text-[var(--rota-text)] shrink-0"
         >
           Limpar
         </button>
@@ -181,9 +181,9 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
             className={`min-h-[44px] rounded-2xl px-1.5 text-xs font-semibold tabular-nums whitespace-nowrap transition-colors duration-150 active:scale-[0.98] ${
               selecionado
                 ? ehGanho
-                  ? 'bg-[#35D39A]/18 text-[#35D39A] ring-1 ring-[#35D39A]/50'
-                  : 'bg-[#F07878]/18 text-[#F79D9D] ring-1 ring-[#F07878]/50'
-                : 'neu-btn-secondary text-[#F5F7FA]'
+                  ? 'bg-[var(--rota-success-soft)] text-[var(--rota-success)] ring-1 ring-[var(--rota-success-soft)]'
+                  : 'bg-[var(--rota-danger-soft)] text-[var(--rota-danger-text)] ring-1 ring-[var(--rota-danger-soft)]'
+                : 'neu-btn-secondary text-[var(--rota-text)]'
             }`}
           >
             R$ {valor}
@@ -197,7 +197,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
     <section aria-labelledby="titulo-lancamento" className="neu-card p-4 sm:p-6">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="icon-tile text-[#70B7F0]">
+          <div className="icon-tile text-[var(--rota-accent)]">
             <Wallet className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden="true" />
           </div>
           <div className="min-w-0">
@@ -206,7 +206,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
             </h2>
             <p
               className={`text-xs font-medium truncate ${
-                ehGanho ? 'text-[#35D39A]' : 'text-[#F79D9D]'
+                ehGanho ? 'text-[var(--rota-success)]' : 'text-[var(--rota-danger-text)]'
               }`}
             >
               {ehGanho ? 'Adicionando valor recebido' : 'Registrando despesa'}
@@ -218,7 +218,9 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
           {confirmado ? (
             <span
               className={`inline-flex min-h-[44px] items-center gap-1 text-xs font-semibold whitespace-nowrap ${
-                confirmado.ehGanho ? 'text-[#35D39A]' : 'text-[#F79D9D]'
+                confirmado.ehGanho
+                  ? 'text-[var(--rota-success)]'
+                  : 'text-[var(--rota-danger-text)]'
               }`}
             >
               <Check className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
@@ -231,8 +233,8 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
               onClick={handleAlternarModoRapido}
               className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl px-3 text-xs font-semibold whitespace-nowrap transition-colors duration-150 active:scale-[0.98] ${
                 modoRapido
-                  ? 'bg-[#3186D1]/20 text-[#70B7F0]'
-                  : 'neu-btn-secondary text-[#9AA6B8] hover:text-[#F5F7FA]'
+                  ? 'bg-[var(--rota-accent-muted)] text-[var(--rota-accent)]'
+                  : 'neu-btn-secondary text-[var(--rota-text-soft)] hover:text-[var(--rota-text)]'
               }`}
             >
               <Zap className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} aria-hidden="true" />
@@ -242,7 +244,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
         </div>
       </div>
 
-      {/* 1. Escolher Ganho ou Gasto (sinalizado por cor, ícone e texto) */}
+      {/* 1. Escolher Ganho ou Gasto */}
       <div
         role="tablist"
         aria-label="Tipo de movimentação"
@@ -258,7 +260,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
           }}
           className={`tab-item ${
             ehGanho
-              ? 'bg-[#35D39A]/18 text-[#35D39A] ring-1 ring-[#35D39A]/45'
+              ? 'bg-[var(--rota-success-soft)] text-[var(--rota-success)] ring-1 ring-[var(--rota-success-soft)]/45'
               : 'tab-item-idle'
           }`}
         >
@@ -275,7 +277,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
           }}
           className={`tab-item ${
             !ehGanho
-              ? 'bg-[#F07878]/18 text-[#F79D9D] ring-1 ring-[#F07878]/45'
+              ? 'bg-[var(--rota-danger-soft)] text-[var(--rota-danger-text)] ring-1 ring-[var(--rota-danger-soft)]/45'
               : 'tab-item-idle'
           }`}
         >
@@ -285,9 +287,9 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
       </div>
 
       <form onSubmit={handleSubmit} className="mt-3.5 space-y-3.5">
-        {/* 2. Plataforma ou Categoria (opções mais usadas primeiro) */}
+        {/* 2. Plataforma ou Categoria */}
         <div>
-          <span className="block text-xs font-medium text-[#9AA6B8] mb-2">
+          <span className="block text-xs font-medium text-[var(--rota-text-soft)] mb-2">
             {ehGanho ? 'Plataforma' : 'Categoria'}
           </span>
           <div className="grid grid-cols-2 gap-2">
@@ -303,8 +305,8 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
                       onClick={() => setPlataforma(item)}
                       className={`min-h-[44px] rounded-2xl px-2 sm:px-3 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1 sm:gap-1.5 transition-colors duration-150 active:scale-[0.98] ${
                         ativo
-                          ? 'bg-[#35D39A]/18 text-[#35D39A] ring-1 ring-[#35D39A]/50'
-                          : 'bg-[#273244] text-[#9AA6B8] hover:text-[#F5F7FA]'
+                          ? 'bg-[var(--rota-success-soft)] text-[var(--rota-success)] ring-1 ring-[var(--rota-success-soft)]/50'
+                          : 'bg-[var(--rota-surface-2)] text-[var(--rota-text-soft)] hover:text-[var(--rota-text)]'
                       }`}
                     >
                       {ativo && (
@@ -324,8 +326,8 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
                       onClick={() => setCategoriaGasto(item)}
                       className={`min-h-[44px] rounded-2xl px-2 sm:px-3 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1 sm:gap-1.5 transition-colors duration-150 active:scale-[0.98] ${
                         ativo
-                          ? 'bg-[#F07878]/18 text-[#F79D9D] ring-1 ring-[#F07878]/50'
-                          : 'bg-[#273244] text-[#9AA6B8] hover:text-[#F5F7FA]'
+                          ? 'bg-[var(--rota-danger-soft)] text-[var(--rota-danger-text)] ring-1 ring-[var(--rota-danger-soft)]/50'
+                          : 'bg-[var(--rota-surface-2)] text-[var(--rota-text-soft)] hover:text-[var(--rota-text)]'
                       }`}
                     >
                       {ativo && (
@@ -343,7 +345,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
           <div className="flex items-center justify-between gap-2 mb-1.5">
             <label
               htmlFor="input-valor-lancamento"
-              className="text-xs font-medium text-[#9AA6B8]"
+              className="text-xs font-medium text-[var(--rota-text-soft)]"
             >
               {modoRapido ? 'Valor rápido ou manual' : 'Valor'}
             </label>
@@ -351,7 +353,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
               type="button"
               aria-expanded={mostrarObs}
               onClick={() => setMostrarObs((prev) => !prev)}
-              className="inline-flex min-h-[44px] -my-2.5 items-center gap-1 px-2 -mr-2 rounded-xl text-xs font-medium text-[#70B7F0] hover:text-[#F5F7FA] transition-colors"
+              className="inline-flex min-h-[44px] -my-2.5 items-center gap-1 px-2 -mr-2 rounded-xl text-xs font-medium text-[var(--rota-accent)] hover:text-[var(--rota-text)] transition-colors"
             >
               <MessageSquarePlus className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
               {mostrarObs ? 'Ocultar observação' : 'Observação'}
@@ -363,15 +365,15 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
             {gradeAtalhosValor}
           </div>
 
-          {erro && <p className="mt-2 text-xs text-[#F48C8C]">{erro}</p>}
+          {erro && <p className="mt-2 text-xs text-[var(--rota-danger-text)]">{erro}</p>}
         </div>
 
-        {/* Observação opcional recolhida por padrão no modo rápido */}
+        {/* Observação opcional */}
         {mostrarObs && (
           <div>
             <label
               htmlFor="input-observacao-lancamento"
-              className="block text-xs font-medium text-[#9AA6B8] mb-1.5"
+              className="block text-xs font-medium text-[var(--rota-text-soft)] mb-1.5"
             >
               Observação (opcional)
             </label>
@@ -387,17 +389,17 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
                     ? 'Ex: taxa chuva, gorjeta, centro'
                     : 'Ex: troca de óleo, posto, almoço'
                 }
-                className="w-full bg-transparent text-sm text-[#F5F7FA] placeholder:text-[#9AA6B8]/60 focus:outline-none"
+                className="w-full bg-transparent text-sm text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none"
               />
             </div>
           </div>
         )}
 
-        {/* 4. Ação principal claramente separada */}
+        {/* 4. Ação principal */}
         <div className="pt-1">
           <button
             type="submit"
-            className="btn-primary-glow flex w-full min-h-[48px] items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold text-[#F5F7FA] whitespace-nowrap active:scale-[0.98]"
+            className="btn-primary-glow flex w-full min-h-[48px] items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
           >
             <PlusCircle className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
             Registrar lançamento

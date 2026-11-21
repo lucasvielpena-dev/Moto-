@@ -176,7 +176,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
     <section aria-labelledby="titulo-lista" className="neu-card p-4 sm:p-6">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="icon-tile text-[#70B7F0]">
+          <div className="icon-tile text-[var(--rota-accent)]">
             <Clock
               className="h-[18px] w-[18px]"
               strokeWidth={1.75}
@@ -187,7 +187,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
             <h2 id="titulo-lista" className="card-title">
               Histórico
             </h2>
-            <p className="text-xs font-medium text-[#9AA6B8] truncate">
+            <p className="text-xs font-medium text-[var(--rota-text-soft)] truncate">
               Período: {rotuloPeriodo(periodo)}
             </p>
           </div>
@@ -249,11 +249,11 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
 
       {aba === 'lancamentos' ? (
         lancamentosOrdenados.length === 0 ? (
-          <div className="neu-inset rounded-2xl px-4 py-6 text-center text-xs text-[#9AA6B8]">
+          <div className="neu-inset rounded-2xl px-4 py-6 text-center text-xs text-[var(--rota-text-soft)]">
             Nenhum ganho ou gasto registrado neste período.
           </div>
         ) : (
-          <ul className="divide-y divide-white/8">
+          <ul className="divide-y divide-[var(--rota-line)]">
             {lancamentosVisiveis.map((item) => {
               const ehGanho = item.tipo === TipoLancamento.GANHO;
               const nomeCategoria = rotuloCategoria(item.categoria);
@@ -265,21 +265,21 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                   <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
                     <div
                       className={`icon-tile mt-0.5 sm:mt-0 ${
-                        ehGanho ? 'text-[#35D39A]' : 'text-[#F07878]'
+                        ehGanho ? 'text-[var(--rota-success)]' : 'text-[var(--rota-danger)]'
                       }`}
                     >
                       {renderizarIconeLancamento(item)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-[#F5F7FA] truncate">
+                      <p className="text-sm font-semibold text-[var(--rota-text)] truncate">
                         {nomeCategoria}
                       </p>
-                      <p className="text-xs text-[#9AA6B8] truncate">
+                      <p className="text-xs text-[var(--rota-text-soft)] truncate">
                         {formatarDataHora(item.data)} ·{' '}
                         {ehGanho ? 'Ganho' : 'Gasto'}
                       </p>
                       {item.observacao && (
-                        <p className="text-xs text-[#F5F7FA]/85 truncate mt-0.5">
+                        <p className="text-xs text-[var(--rota-text)]/85 truncate mt-0.5">
                           {item.observacao}
                         </p>
                       )}
@@ -289,7 +289,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                   <div className="flex flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-2 shrink-0">
                     <span
                       className={`text-sm font-bold tabular-nums whitespace-nowrap ${
-                        ehGanho ? 'text-[#35D39A]' : 'text-[#F07878]'
+                        ehGanho ? 'text-[var(--rota-success)]' : 'text-[var(--rota-danger)]'
                       }`}
                     >
                       {ehGanho ? '+ ' : '- '}
@@ -300,7 +300,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                         type="button"
                         onClick={() => abrirEdicao(item)}
                         aria-label={`Editar ${nomeCategoria} de ${formatarMoeda(item.valor)}`}
-                        className="neu-btn-secondary flex h-11 w-11 items-center justify-center rounded-2xl text-[#9AA6B8] hover:text-[#F5F7FA] active:scale-[0.98]"
+                        className="neu-btn-secondary flex h-11 w-11 items-center justify-center rounded-2xl text-[var(--rota-text-soft)] hover:text-[var(--rota-text)] active:scale-[0.98]"
                       >
                         <Pencil
                           className="h-4 w-4"
@@ -312,7 +312,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                         type="button"
                         onClick={() => onExcluirLancamento(item.id)}
                         aria-label={`Excluir ${nomeCategoria} de ${formatarMoeda(item.valor)}`}
-                        className="neu-btn-secondary flex h-11 w-11 items-center justify-center rounded-2xl text-[#9AA6B8] hover:text-[#F07878] active:scale-[0.98]"
+                        className="neu-btn-secondary flex h-11 w-11 items-center justify-center rounded-2xl text-[var(--rota-text-soft)] hover:text-[var(--rota-danger)] active:scale-[0.98]"
                       >
                         <Trash2
                           className="h-4 w-4"
@@ -328,18 +328,18 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
           </ul>
         )
       ) : trajetosOrdenados.length === 0 ? (
-        <div className="neu-inset rounded-2xl px-4 py-6 text-center text-xs text-[#9AA6B8]">
+        <div className="neu-inset rounded-2xl px-4 py-6 text-center text-xs text-[var(--rota-text-soft)]">
           Nenhum trajeto salvo neste período.
         </div>
       ) : (
-        <ul className="divide-y divide-white/8">
+        <ul className="divide-y divide-[var(--rota-line)]">
           {trajetosVisiveis.map((trajeto) => (
             <li
               key={trajeto.id}
               className="flex items-center justify-between gap-3 py-3 first:pt-1 last:pb-1"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="icon-tile text-[#70B7F0]">
+                <div className="icon-tile text-[var(--rota-accent)]">
                   <Navigation
                     className="h-[18px] w-[18px]"
                     strokeWidth={1.75}
@@ -347,10 +347,10 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                   />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[#F5F7FA] tabular-nums">
+                  <p className="text-sm font-semibold text-[var(--rota-text)] tabular-nums">
                     {formatarKm(trajeto.km)} km
                   </p>
-                  <p className="text-xs text-[#9AA6B8] truncate tabular-nums">
+                  <p className="text-xs text-[var(--rota-text-soft)] truncate tabular-nums">
                     {formatarDataHora(trajeto.data)} ·{' '}
                     {trajeto.origem === 'gps' ? 'GPS automático' : 'Manual'}
                     {trajeto.duracaoSegundos
@@ -364,7 +364,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                 type="button"
                 onClick={() => onExcluirTrajeto(trajeto.id)}
                 aria-label={`Excluir trajeto de ${formatarKm(trajeto.km)} km`}
-                className="neu-btn-secondary flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-[#9AA6B8] hover:text-[#F07878] active:scale-[0.98]"
+                className="neu-btn-secondary flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-[var(--rota-text-soft)] hover:text-[var(--rota-danger)] active:scale-[0.98]"
               >
                 <Trash2
                   className="h-4 w-4"
@@ -381,7 +381,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
         <button
           type="button"
           onClick={() => setMostrarTodos((prev) => !prev)}
-          className="neu-btn-secondary mt-3 flex w-full min-h-[44px] items-center justify-center gap-1.5 rounded-2xl px-4 text-xs font-semibold text-[#9AA6B8] hover:text-[#F5F7FA] active:scale-[0.98]"
+          className="neu-btn-secondary mt-3 flex w-full min-h-[44px] items-center justify-center gap-1.5 rounded-2xl px-4 text-xs font-semibold text-[var(--rota-text-soft)] hover:text-[var(--rota-text)] active:scale-[0.98]"
         >
           {mostrarTodos ? (
             <>
@@ -414,7 +414,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                 type="button"
                 onClick={() => setItemEditando(null)}
                 aria-label="Fechar edição"
-                className="neu-btn-secondary flex h-11 w-11 items-center justify-center rounded-2xl text-[#9AA6B8] hover:text-[#F5F7FA] active:scale-[0.98]"
+                className="neu-btn-secondary flex h-11 w-11 items-center justify-center rounded-2xl text-[var(--rota-text-soft)] hover:text-[var(--rota-text)] active:scale-[0.98]"
               >
                 <X className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
               </button>
@@ -436,7 +436,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                   }}
                   className={`tab-item ${
                     editTipo === TipoLancamento.GANHO
-                      ? 'bg-[#35D39A]/18 text-[#35D39A] ring-1 ring-[#35D39A]/45'
+                      ? 'bg-[var(--rota-success-soft)] text-[var(--rota-success)] ring-1 ring-[var(--rota-success-soft)]/45'
                       : 'tab-item-idle'
                   }`}
                 >
@@ -452,7 +452,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                   }}
                   className={`tab-item ${
                     editTipo === TipoLancamento.GASTO
-                      ? 'bg-[#F07878]/18 text-[#F79D9D] ring-1 ring-[#F07878]/45'
+                      ? 'bg-[var(--rota-danger-soft)] text-[var(--rota-danger-text)] ring-1 ring-[var(--rota-danger-soft)]/45'
                       : 'tab-item-idle'
                   }`}
                 >
@@ -461,7 +461,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
               </div>
 
               <div>
-                <span className="block text-xs font-medium text-[#9AA6B8] mb-2">
+                <span className="block text-xs font-medium text-[var(--rota-text-soft)] mb-2">
                   {editTipo === TipoLancamento.GANHO
                     ? 'Plataforma'
                     : 'Categoria'}
@@ -480,9 +480,9 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                         className={`min-h-[44px] rounded-2xl px-2 sm:px-3 text-xs sm:text-sm font-semibold whitespace-nowrap truncate transition-colors duration-150 active:scale-[0.98] ${
                           ativo
                             ? editTipo === TipoLancamento.GANHO
-                              ? 'bg-[#35D39A]/18 text-[#35D39A] ring-1 ring-[#35D39A]/50'
-                              : 'bg-[#F07878]/18 text-[#F79D9D] ring-1 ring-[#F07878]/50'
-                            : 'bg-[#273244] text-[#9AA6B8] hover:text-[#F5F7FA]'
+                              ? 'bg-[var(--rota-success-soft)] text-[var(--rota-success)] ring-1 ring-[var(--rota-success-soft)]/50'
+                              : 'bg-[var(--rota-danger-soft)] text-[var(--rota-danger-text)] ring-1 ring-[var(--rota-danger-soft)]/50'
+                            : 'bg-[var(--rota-surface-2)] text-[var(--rota-text-soft)] hover:text-[var(--rota-text)]'
                         }`}
                       >
                         {rotuloCategoria(cat)}
@@ -495,7 +495,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
               <div>
                 <label
                   htmlFor="input-edit-valor"
-                  className="block text-xs font-medium text-[#9AA6B8] mb-2"
+                  className="block text-xs font-medium text-[var(--rota-text-soft)] mb-2"
                 >
                   Valor
                 </label>
@@ -503,8 +503,8 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                   <span
                     className={`mr-2 text-sm font-semibold ${
                       editTipo === TipoLancamento.GANHO
-                        ? 'text-[#35D39A]'
-                        : 'text-[#F48C8C]'
+                        ? 'text-[var(--rota-success)]'
+                        : 'text-[var(--rota-danger-text)]'
                     }`}
                   >
                     R$
@@ -518,18 +518,18 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                       setEditValorTexto(e.target.value);
                       if (editErro) setEditErro(null);
                     }}
-                    className="w-full bg-transparent text-base font-semibold text-[#F5F7FA] placeholder:text-[#9AA6B8]/60 focus:outline-none tabular-nums"
+                    className="w-full bg-transparent text-base font-semibold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
                   />
                 </div>
                 {editErro && (
-                  <p className="mt-2 text-xs text-[#F07878]">{editErro}</p>
+                  <p className="mt-2 text-xs text-[var(--rota-danger-text)]">{editErro}</p>
                 )}
               </div>
 
               <div>
                 <label
                   htmlFor="input-edit-obs"
-                  className="block text-xs font-medium text-[#9AA6B8] mb-2"
+                  className="block text-xs font-medium text-[var(--rota-text-soft)] mb-2"
                 >
                   Observação
                 </label>
@@ -541,14 +541,14 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                     value={editObs}
                     onChange={(e) => setEditObs(e.target.value)}
                     placeholder="Opcional"
-                    className="w-full bg-transparent text-sm text-[#F5F7FA] placeholder:text-[#9AA6B8]/60 focus:outline-none"
+                    className="w-full bg-transparent text-sm text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none"
                   />
                 </div>
               </div>
 
               <button
                 type="submit"
-                className="btn-primary-glow flex w-full min-h-[48px] items-center justify-center rounded-2xl px-4 text-sm font-semibold text-[#F5F7FA] active:scale-[0.98]"
+                className="btn-primary-glow flex w-full min-h-[48px] items-center justify-center rounded-2xl px-4 text-sm font-semibold text-[var(--rota-text)] active:scale-[0.98]"
               >
                 Salvar alterações
               </button>

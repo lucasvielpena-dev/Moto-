@@ -222,13 +222,13 @@ export default function App() {
             <img
               src="/icon.svg"
               alt="Rota"
-              className="h-10 w-10 shrink-0 rounded-2xl"
+              className="h-10 w-10 shrink-0 rounded-3xl"
             />
             <div className="min-w-0">
-              <h1 className="text-base font-semibold leading-tight tracking-tight text-[#F5F7FA] whitespace-nowrap">
+              <h1 className="text-base font-semibold leading-tight tracking-tight text-[var(--rota-text)] whitespace-nowrap">
                 Rota
               </h1>
-              <p className="text-xs font-medium text-[#9AA6B8] truncate">
+              <p className="text-xs font-medium text-[var(--rota-text-soft)] truncate">
                 Controle diário de entregas
               </p>
             </div>
@@ -253,7 +253,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => handleTrocarAba('resumo')}
-                  className="inline-flex min-h-[44px] -my-2.5 items-center px-2 -mr-2 rounded-xl text-xs font-semibold text-[#70B7F0] hover:text-[#F5F7FA] transition-colors whitespace-nowrap"
+                  className="inline-flex min-h-[44px] -my-2.5 items-center px-2 -mr-2 rounded-xl text-xs font-semibold text-[var(--rota-accent)] hover:text-[var(--rota-text)] transition-colors whitespace-nowrap"
                 >
                   Ver resumo
                 </button>
@@ -261,23 +261,23 @@ export default function App() {
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div className="neu-tile px-3 py-2.5">
-                  <span className="block text-xs font-medium text-[#9AA6B8]">
+                  <span className="block text-xs font-medium text-[var(--rota-text-soft)]">
                     Receita
                   </span>
-                  <span className="mt-0.5 block text-sm sm:text-base font-bold text-[#35D39A] tabular-nums">
+                  <span className="mt-0.5 block text-base sm:text-lg font-bold text-[var(--rota-success)] tabular-nums">
                     {formatarMoeda(resumoHoje.ganhos)}
                   </span>
                 </div>
 
                 <div className="neu-tile px-3 py-2.5">
-                  <span className="block text-xs font-medium text-[#9AA6B8]">
+                  <span className="block text-xs font-medium text-[var(--rota-text-soft)]">
                     Despesas
                   </span>
                   <span
-                    className={`mt-0.5 block text-sm sm:text-base font-bold tabular-nums ${
+                    className={`mt-0.5 block text-base sm:text-lg font-bold tabular-nums ${
                       resumoHoje.gastos > 0
-                        ? 'text-[#F48C8C]'
-                        : 'text-[#F5F7FA]'
+                        ? 'text-[var(--rota-danger-text)]'
+                        : 'text-[var(--rota-text)]'
                     }`}
                   >
                     {formatarMoeda(resumoHoje.gastos)}
@@ -285,16 +285,16 @@ export default function App() {
                 </div>
 
                 <div className="neu-tile px-3 py-2.5">
-                  <span className="block text-xs font-medium text-[#9AA6B8]">
+                  <span className="block text-xs font-medium text-[var(--rota-text-soft)]">
                     {rotuloLucroHoje}
                   </span>
                   <span
-                    className={`mt-0.5 block text-sm sm:text-base font-bold tabular-nums ${
+                    className={`mt-0.5 block text-base sm:text-lg font-bold tabular-nums ${
                       resumoHoje.lucro > 0
-                        ? 'text-[#35D39A]'
+                        ? 'text-[var(--rota-success)]'
                         : resumoHoje.lucro < 0
-                          ? 'text-[#F48C8C]'
-                          : 'text-[#F5F7FA]'
+                          ? 'text-[var(--rota-danger-text)]'
+                          : 'text-[var(--rota-text)]'
                     }`}
                   >
                     {formatarMoeda(resumoHoje.lucro)}
@@ -302,17 +302,17 @@ export default function App() {
                 </div>
 
                 <div className="neu-tile px-3 py-2.5">
-                  <span className="block text-xs font-medium text-[#9AA6B8]">
+                  <span className="block text-xs font-medium text-[var(--rota-text-soft)]">
                     Distância
                   </span>
-                  <span className="mt-0.5 block text-sm sm:text-base font-bold text-[#F5F7FA] tabular-nums">
+                  <span className="mt-0.5 block text-base sm:text-lg font-bold text-[var(--rota-text)] tabular-nums">
                     {formatarKm(resumoHoje.km)} km
                   </span>
                 </div>
               </div>
 
               {/* Barra de progresso e meta logo abaixo dos indicadores */}
-              <div className="mt-3 pt-3 border-t border-white/6">
+              <div className="mt-3 pt-3 border-t border-[var(--rota-line)]">
                 <div
                   role="progressbar"
                   aria-label="Progresso da meta diária"
@@ -321,13 +321,13 @@ export default function App() {
                   aria-valuenow={
                     metaDiaria > 0 ? Math.min(resumoHoje.ganhos, metaDiaria) : 0
                   }
-                  className="h-2 w-full overflow-hidden rounded-full bg-[#131A26]"
+                  className="h-3 w-full overflow-hidden rounded-full bg-[var(--rota-track)]"
                 >
                   <div
                     className={`h-full rounded-full transition-all duration-300 ${
                       metaDiaria > 0 && resumoHoje.ganhos >= metaDiaria
-                        ? 'bg-[#35D39A]'
-                        : 'bg-[#3186D1]'
+                        ? 'bg-[var(--rota-success)]'
+                        : 'bg-[var(--rota-accent-strong)]'
                     }`}
                     style={{ width: `${progressoMetaHoje}%` }}
                   />
@@ -336,10 +336,10 @@ export default function App() {
                 <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs tabular-nums">
                   {metaDiaria > 0 ? (
                     <>
-                      <span className="font-medium text-[#F5F7FA]">
+                      <span className="font-medium text-[var(--rota-text)]">
                         {Math.round(progressoMetaHoje)}% da meta diária
                       </span>
-                      <span className="text-[#9AA6B8]">
+                      <span className="text-[var(--rota-text-soft)]">
                         {resumoHoje.ganhos >= metaDiaria
                           ? `${formatarMoeda(resumoHoje.ganhos)} de ${formatarMoeda(metaDiaria)}`
                           : `Faltam ${formatarMoeda(faltaMetaHoje)}`}
@@ -347,13 +347,13 @@ export default function App() {
                     </>
                   ) : (
                     <>
-                      <span className="text-[#9AA6B8]">
+                      <span className="text-[var(--rota-text-soft)]">
                         Meta diária não definida
                       </span>
                       <button
                         type="button"
                         onClick={() => handleTrocarAba('resumo')}
-                        className="inline-flex min-h-[44px] -my-2.5 items-center px-2 -mr-2 rounded-xl font-semibold text-[#70B7F0] hover:text-[#F5F7FA] transition-colors"
+                        className="inline-flex min-h-[44px] -my-2.5 items-center px-2 -mr-2 rounded-xl font-semibold text-[var(--rota-accent)] hover:text-[var(--rota-text)] transition-colors"
                       >
                         Definir meta
                       </button>
@@ -415,18 +415,18 @@ export default function App() {
       {desfazer && (
         <div
           role="status"
-          className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] left-3 right-3 z-40 mx-auto max-w-[508px] flex items-center justify-between gap-3 rounded-2xl bg-[#1B2432] px-4 py-2 shadow-lg"
+          className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] left-3 right-3 z-40 mx-auto max-w-[508px] flex items-center justify-between gap-3 rounded-2xl bg-[var(--rota-surface)] px-4 py-2 shadow-lg"
         >
-          <span className="text-xs font-medium text-[#9AA6B8] truncate">
+          <span className="text-xs font-medium text-[var(--rota-text-soft)] truncate">
             Excluído:{' '}
-            <strong className="font-semibold text-[#F5F7FA]">
+            <strong className="font-semibold text-[var(--rota-text)]">
               {desfazer.rotulo}
             </strong>
           </span>
           <button
             type="button"
             onClick={handleExecutarDesfazer}
-            className="btn-primary-glow inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-2xl px-3.5 text-xs font-semibold text-[#F5F7FA] whitespace-nowrap active:scale-[0.98]"
+            className="btn-primary-glow inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-2xl px-3.5 text-xs font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
           >
             <RotateCcw
               className="h-4 w-4"
@@ -441,10 +441,10 @@ export default function App() {
       {!isOnline && !desfazer && (
         <div
           role="status"
-          className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] left-3 right-3 z-40 mx-auto max-w-[508px] flex items-center justify-center gap-2 rounded-2xl bg-[#1B2432] px-4 py-2.5 text-xs font-medium text-[#F5F7FA] shadow-lg text-center"
+          className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] left-3 right-3 z-40 mx-auto max-w-[508px] flex items-center justify-center gap-2 rounded-2xl bg-[var(--rota-surface)] px-4 py-2.5 text-xs font-medium text-[var(--rota-text)] shadow-lg text-center"
         >
           <WifiOff
-            className="h-4 w-4 shrink-0 text-[#70B7F0]"
+            className="h-4 w-4 shrink-0 text-[var(--rota-accent)]"
             strokeWidth={1.75}
             aria-hidden="true"
           />
@@ -455,7 +455,7 @@ export default function App() {
       {/* 5. Navegação inferior leve e acessível */}
       <nav
         aria-label="Navegação principal"
-        className="fixed bottom-0 left-0 right-0 z-30 bg-[#0E131D]/95 backdrop-blur-md border-t border-white/6 pb-[env(safe-area-inset-bottom)]"
+        className="fixed bottom-0 left-0 right-0 z-30 bg-[var(--rota-bg)]/95 backdrop-blur-md border-t border-[var(--rota-line)] pb-[env(safe-area-inset-bottom)]"
       >
         <div
           role="tablist"
@@ -469,13 +469,13 @@ export default function App() {
             onClick={() => handleTrocarAba('registrar')}
             className={`min-h-[48px] rounded-2xl px-2 text-xs sm:text-sm font-semibold inline-flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors duration-150 ${
               abaAtiva === 'registrar'
-                ? 'bg-[#3186D1]/20 text-[#F5F7FA]'
-                : 'text-[#9AA6B8] hover:text-[#F5F7FA]'
+                ? 'bg-[var(--rota-accent-muted)] text-[var(--rota-text)]'
+                : 'text-[var(--rota-text-soft)] hover:text-[var(--rota-text)]'
             }`}
           >
             <Navigation
               className={`h-[18px] w-[18px] shrink-0 ${
-                abaAtiva === 'registrar' ? 'text-[#70B7F0]' : ''
+                abaAtiva === 'registrar' ? 'text-[var(--rota-accent)]' : ''
               }`}
               strokeWidth={1.75}
               aria-hidden="true"
@@ -490,13 +490,13 @@ export default function App() {
             onClick={() => handleTrocarAba('resumo')}
             className={`min-h-[48px] rounded-2xl px-2 text-xs sm:text-sm font-semibold inline-flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors duration-150 ${
               abaAtiva === 'resumo'
-                ? 'bg-[#3186D1]/20 text-[#F5F7FA]'
-                : 'text-[#9AA6B8] hover:text-[#F5F7FA]'
+                ? 'bg-[var(--rota-accent-muted)] text-[var(--rota-text)]'
+                : 'text-[var(--rota-text-soft)] hover:text-[var(--rota-text)]'
             }`}
           >
             <BarChart3
               className={`h-[18px] w-[18px] shrink-0 ${
-                abaAtiva === 'resumo' ? 'text-[#70B7F0]' : ''
+                abaAtiva === 'resumo' ? 'text-[var(--rota-accent)]' : ''
               }`}
               strokeWidth={1.75}
               aria-hidden="true"
@@ -511,13 +511,13 @@ export default function App() {
             onClick={() => handleTrocarAba('historico')}
             className={`min-h-[48px] rounded-2xl px-2 text-xs sm:text-sm font-semibold inline-flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors duration-150 ${
               abaAtiva === 'historico'
-                ? 'bg-[#3186D1]/20 text-[#F5F7FA]'
-                : 'text-[#9AA6B8] hover:text-[#F5F7FA]'
+                ? 'bg-[var(--rota-accent-muted)] text-[var(--rota-text)]'
+                : 'text-[var(--rota-text-soft)] hover:text-[var(--rota-text)]'
             }`}
           >
             <Clock
               className={`h-[18px] w-[18px] shrink-0 ${
-                abaAtiva === 'historico' ? 'text-[#70B7F0]' : ''
+                abaAtiva === 'historico' ? 'text-[var(--rota-accent)]' : ''
               }`}
               strokeWidth={1.75}
               aria-hidden="true"

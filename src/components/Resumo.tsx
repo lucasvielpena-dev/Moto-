@@ -209,7 +209,7 @@ export const Resumo: React.FC<ResumoProps> = ({
     <section aria-labelledby="titulo-resumo" className="neu-card p-4 sm:p-6">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="icon-tile text-[#70B7F0]">
+          <div className="icon-tile text-[var(--rota-accent)]">
             <BarChart3
               className="h-[18px] w-[18px]"
               strokeWidth={1.75}
@@ -220,7 +220,7 @@ export const Resumo: React.FC<ResumoProps> = ({
             <h2 id="titulo-resumo" className="card-title">
               Resumo
             </h2>
-            <p className="text-xs font-medium text-[#9AA6B8] truncate tabular-nums">
+            <p className="text-xs font-medium text-[var(--rota-text-soft)] truncate tabular-nums">
               {lancamentos.length}{' '}
               {lancamentos.length === 1 ? 'lançamento' : 'lançamentos'}
               {totalSegundos > 0
@@ -260,8 +260,8 @@ export const Resumo: React.FC<ResumoProps> = ({
           <div
             className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 ${
               lucroPositivo
-                ? 'bg-[#35D39A]/14 text-[#35D39A]'
-                : 'bg-[#F07878]/14 text-[#F79D9D]'
+                ? 'bg-[var(--rota-success-tint)] text-[var(--rota-success)]'
+                : 'bg-[var(--rota-danger-tint)] text-[var(--rota-danger-text)]'
             }`}
           >
             <div className="flex items-center gap-2.5 min-w-0">
@@ -289,7 +289,7 @@ export const Resumo: React.FC<ResumoProps> = ({
             </span>
           </div>
         ) : (
-          <div className="neu-inset rounded-2xl px-4 py-3.5 text-center text-xs text-[#9AA6B8]">
+          <div className="neu-inset rounded-2xl px-4 py-3.5 text-center text-xs text-[var(--rota-text-soft)]">
             Registre ganhos, despesas ou trajetos para ver o balanço do período.
           </div>
         )}
@@ -298,17 +298,17 @@ export const Resumo: React.FC<ResumoProps> = ({
       {/* Grade dos 8 indicadores principais */}
       <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3">
         <div className="neu-tile p-3.5">
-          <span className="block text-xs text-[#9AA6B8]">Receita</span>
-          <span className="mt-1 block text-base font-bold text-[#35D39A] tabular-nums">
+          <span className="block text-xs text-[var(--rota-text-soft)]">Receita</span>
+          <span className="mt-1 block text-base font-bold text-[var(--rota-success)] tabular-nums">
             {formatarMoeda(totalGanhos)}
           </span>
         </div>
 
         <div className="neu-tile p-3.5">
-          <span className="block text-xs text-[#9AA6B8]">Despesas</span>
+          <span className="block text-xs text-[var(--rota-text-soft)]">Despesas</span>
           <span
             className={`mt-1 block text-base font-bold tabular-nums ${
-              totalGastos > 0 ? 'text-[#F48C8C]' : 'text-[#F5F7FA]'
+              totalGastos > 0 ? 'text-[var(--rota-danger-text)]' : 'text-[var(--rota-text)]'
             }`}
           >
             {formatarMoeda(totalGastos)}
@@ -316,16 +316,16 @@ export const Resumo: React.FC<ResumoProps> = ({
         </div>
 
         <div className="neu-tile p-3.5">
-          <span className="block text-xs text-[#9AA6B8]">
+          <span className="block text-xs text-[var(--rota-text-soft)]">
             {totalGastos === 0 ? 'Lucro estimado' : 'Lucro'}
           </span>
           <span
             className={`mt-1 block text-base font-bold tabular-nums ${
               lucro > 0
-                ? 'text-[#35D39A]'
+                ? 'text-[var(--rota-success)]'
                 : lucro < 0
-                  ? 'text-[#F48C8C]'
-                  : 'text-[#F5F7FA]'
+                  ? 'text-[var(--rota-danger-text)]'
+                  : 'text-[var(--rota-text)]'
             }`}
           >
             {formatarMoeda(lucro)}
@@ -333,28 +333,28 @@ export const Resumo: React.FC<ResumoProps> = ({
         </div>
 
         <div className="neu-tile p-3.5">
-          <span className="block text-xs text-[#9AA6B8]">Distância</span>
-          <span className="mt-1 block text-base font-bold text-[#F5F7FA] tabular-nums">
+          <span className="block text-xs text-[var(--rota-text-soft)]">Distância</span>
+          <span className="mt-1 block text-base font-bold text-[var(--rota-text)] tabular-nums">
             {formatarKm(totalKm)} km
           </span>
         </div>
 
         <div className="neu-tile p-3.5">
-          <span className="block text-xs text-[#9AA6B8]">Receita por km</span>
-          <span className="mt-1 block text-base font-bold text-[#70B7F0] tabular-nums">
+          <span className="block text-xs text-[var(--rota-text-soft)]">Receita por km</span>
+          <span className="mt-1 block text-base font-bold text-[var(--rota-accent)] tabular-nums">
             {formatarMoeda(ganhoPorKm)}/km
           </span>
         </div>
 
         <div className="neu-tile p-3.5">
-          <span className="block text-xs text-[#9AA6B8]">Lucro por km</span>
+          <span className="block text-xs text-[var(--rota-text-soft)]">Lucro por km</span>
           <span
             className={`mt-1 block text-base font-bold tabular-nums ${
               lucroPorKm > 0
-                ? 'text-[#35D39A]'
+                ? 'text-[var(--rota-success)]'
                 : lucroPorKm < 0
-                  ? 'text-[#F48C8C]'
-                  : 'text-[#F5F7FA]'
+                  ? 'text-[var(--rota-danger-text)]'
+                  : 'text-[var(--rota-text)]'
             }`}
           >
             {formatarMoeda(lucroPorKm)}/km
@@ -362,10 +362,10 @@ export const Resumo: React.FC<ResumoProps> = ({
         </div>
 
         <div className="neu-tile p-3.5">
-          <span className="block text-xs text-[#9AA6B8]">Custo por km</span>
+          <span className="block text-xs text-[var(--rota-text-soft)]">Custo por km</span>
           <span
             className={`mt-1 block text-base font-bold tabular-nums ${
-              custoPorKm > 0 ? 'text-[#F48C8C]' : 'text-[#F5F7FA]'
+              custoPorKm > 0 ? 'text-[var(--rota-danger-text)]' : 'text-[var(--rota-text)]'
             }`}
           >
             {formatarMoeda(custoPorKm)}/km
@@ -373,37 +373,37 @@ export const Resumo: React.FC<ResumoProps> = ({
         </div>
 
         <div className="neu-tile p-3.5">
-          <span className="block text-xs text-[#9AA6B8]">Ganho por hora</span>
-          <span className="mt-1 block text-base font-bold text-[#70B7F0] tabular-nums">
+          <span className="block text-xs text-[var(--rota-text-soft)]">Ganho por hora</span>
+          <span className="mt-1 block text-base font-bold text-[var(--rota-accent)] tabular-nums">
             {totalSegundos > 0 ? `${formatarMoeda(ganhoPorHora)}/h` : '—'}
           </span>
         </div>
       </div>
 
       {/* Meta diária */}
-      <div className="mt-4 pt-4 border-t border-white/8">
+      <div className="mt-4 pt-4 border-t border-[var(--rota-line)]">
         <div className="flex items-center justify-between gap-2 mb-2">
           <label
             htmlFor="input-meta-diaria"
             className="section-subtitle inline-flex items-center gap-1.5"
           >
             <Target
-              className="h-4 w-4 text-[#70B7F0]"
+              className="h-4 w-4 text-[var(--rota-accent)]"
               strokeWidth={1.75}
               aria-hidden="true"
             />
             Meta diária
           </label>
-          <span className="text-xs text-[#9AA6B8] tabular-nums">
+          <span className="text-xs text-[var(--rota-text-soft)] tabular-nums">
             Hoje:{' '}
-            <strong className="text-[#35D39A] font-semibold">
+            <strong className="text-[var(--rota-success)] font-semibold">
               {formatarMoeda(ganhosHoje)}
             </strong>
           </span>
         </div>
 
         <div className="neu-inset flex items-center rounded-2xl px-4 min-h-[48px]">
-          <span className="mr-2 text-sm font-semibold text-[#70B7F0]">R$</span>
+          <span className="mr-2 text-sm font-semibold text-[var(--rota-accent)]">R$</span>
           <input
             id="input-meta-diaria"
             type="text"
@@ -411,10 +411,10 @@ export const Resumo: React.FC<ResumoProps> = ({
             value={metaTexto}
             onChange={(e) => handleMetaChange(e.target.value)}
             placeholder="Ex: 200,00"
-            className="w-full bg-transparent text-base font-semibold text-[#F5F7FA] placeholder:text-[#9AA6B8]/60 focus:outline-none tabular-nums"
+            className="w-full bg-transparent text-base font-semibold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
           />
           {metaDiaria > 0 && (
-            <span className="ml-2 text-xs font-semibold text-[#70B7F0] tabular-nums shrink-0">
+            <span className="ml-2 text-xs font-semibold text-[var(--rota-accent)] tabular-nums shrink-0">
               {Math.round(progressoMeta)}%
             </span>
           )}
@@ -429,11 +429,11 @@ export const Resumo: React.FC<ResumoProps> = ({
             aria-valuenow={
               metaDiaria > 0 ? Math.min(ganhosHoje, metaDiaria) : 0
             }
-            className="h-2.5 w-full overflow-hidden rounded-full bg-[#131A26]"
+            className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--rota-track)]"
           >
             <div
               className={`h-full rounded-full transition-all duration-300 ${
-                metaAlcancada ? 'bg-[#35D39A]' : 'bg-[#3186D1]'
+                metaAlcancada ? 'bg-[var(--rota-success)]' : 'bg-[var(--rota-accent-strong)]'
               }`}
               style={{ width: `${progressoMeta}%` }}
             />
@@ -441,17 +441,17 @@ export const Resumo: React.FC<ResumoProps> = ({
 
           <p className="mt-2 text-xs tabular-nums">
             {metaDiaria <= 0 ? (
-              <span className="text-[#9AA6B8]">
+              <span className="text-[var(--rota-text-soft)]">
                 Defina um valor acima para acompanhar sua meta diária.
               </span>
             ) : metaAlcancada ? (
-              <span className="font-semibold text-[#35D39A]">
+              <span className="font-semibold text-[var(--rota-success)]">
                 {formatarMoeda(ganhosHoje)} de {formatarMoeda(metaDiaria)} · Meta alcançada
               </span>
             ) : (
-              <span className="text-[#9AA6B8]">
+              <span className="text-[var(--rota-text-soft)]">
                 {Math.round(progressoMeta)}% da meta diária · Faltam{' '}
-                <strong className="font-semibold text-[#F5F7FA]">
+                <strong className="font-semibold text-[var(--rota-text)]">
                   {formatarMoeda(faltaParaMeta)}
                 </strong>
               </span>
@@ -461,20 +461,20 @@ export const Resumo: React.FC<ResumoProps> = ({
       </div>
 
       {/* Evolução dos últimos 7 dias */}
-      <div className="mt-4 pt-4 border-t border-white/8">
+      <div className="mt-4 pt-4 border-t border-[var(--rota-line)]">
         <div className="flex items-center justify-between gap-2 mb-2">
           <h3 className="section-subtitle">Últimos 7 dias</h3>
           <div className="flex items-center gap-3 text-xs tabular-nums">
-            <span className="font-semibold text-[#70B7F0]">
+            <span className="font-semibold text-[var(--rota-accent)]">
               +{formatarMoeda(total7DiasGanhos)}
             </span>
-            <span className="font-semibold text-[#F07878]">
+            <span className="font-semibold text-[var(--rota-danger)]">
               -{formatarMoeda(total7DiasGastos)}
             </span>
           </div>
         </div>
 
-        <div className="rounded-2xl bg-[#131A26] p-3">
+        <div className="rounded-2xl bg-[var(--rota-track)] p-3">
           <div className="h-[176px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
@@ -491,7 +491,7 @@ export const Resumo: React.FC<ResumoProps> = ({
                   axisLine={false}
                   tickLine={false}
                   tick={{
-                    fill: '#9AA6B8',
+                    fill: 'var(--rota-text-soft)',
                     fontSize: 12,
                     fontFamily: 'Poppins',
                   }}
@@ -501,7 +501,7 @@ export const Resumo: React.FC<ResumoProps> = ({
                   axisLine={false}
                   tickLine={false}
                   tick={{
-                    fill: '#9AA6B8',
+                    fill: 'var(--rota-text-soft)',
                     fontSize: 12,
                     fontFamily: 'Poppins',
                   }}
@@ -510,24 +510,24 @@ export const Resumo: React.FC<ResumoProps> = ({
                   }
                 />
                 <Tooltip
-                  cursor={{ fill: 'rgba(112, 183, 240, 0.08)' }}
+                  cursor={{ fill: 'rgba(58, 134, 208, 0.08)' }}
                   content={({ active, payload }) => {
                     if (!active || !payload || payload.length === 0) {
                       return null;
                     }
                     const ponto = payload[0].payload as DadoDiaGrafico;
                     return (
-                      <div className="rounded-2xl bg-[#1B2432] px-3 py-2 shadow-lg space-y-0.5">
-                        <p className="text-xs text-[#9AA6B8]">
+                      <div className="rounded-2xl bg-[var(--rota-surface)] px-3 py-2 shadow-lg space-y-0.5">
+                        <p className="text-xs text-[var(--rota-text-soft)]">
                           {ponto.dataCompleta}
                         </p>
-                        <p className="text-xs font-semibold text-[#35D39A] tabular-nums">
+                        <p className="text-xs font-semibold text-[var(--rota-success)] tabular-nums">
                           Receita: {formatarMoeda(ponto.ganhos)}
                         </p>
-                        <p className="text-xs font-semibold text-[#F07878] tabular-nums">
+                        <p className="text-xs font-semibold text-[var(--rota-danger)] tabular-nums">
                           Despesas: {formatarMoeda(ponto.gastos)}
                         </p>
-                        <p className="text-xs font-semibold text-[#F5F7FA] tabular-nums pt-0.5 border-t border-white/10">
+                        <p className="text-xs font-semibold text-[var(--rota-text)] tabular-nums pt-0.5 border-t border-[var(--rota-line)]">
                           Lucro: {formatarMoeda(ponto.lucro)}
                         </p>
                       </div>
@@ -536,7 +536,7 @@ export const Resumo: React.FC<ResumoProps> = ({
                 />
                 <Bar
                   dataKey="ganhos"
-                  fill="#70B7F0"
+                  fill="#2672B5"
                   radius={[6, 6, 2, 2]}
                   maxBarSize={18}
                 />
@@ -550,7 +550,7 @@ export const Resumo: React.FC<ResumoProps> = ({
             </ResponsiveContainer>
           </div>
           {total7DiasGanhos === 0 && total7DiasGastos === 0 && (
-            <p className="mt-2 text-center text-xs text-[#9AA6B8]">
+            <p className="mt-2 text-center text-xs text-[var(--rota-text-soft)]">
               Sem movimentações registradas nos últimos 7 dias.
             </p>
           )}
@@ -558,7 +558,7 @@ export const Resumo: React.FC<ResumoProps> = ({
       </div>
 
       {/* Detalhamento alternado: Plataformas | Despesas */}
-      <div className="mt-4 pt-4 border-t border-white/8">
+      <div className="mt-4 pt-4 border-t border-[var(--rota-line)]">
         <div
           role="tablist"
           aria-label="Alternar detalhamento entre plataformas e despesas"
@@ -593,16 +593,16 @@ export const Resumo: React.FC<ResumoProps> = ({
             {ganhosPorPlataforma.map((item) => (
               <div key={item.plataforma}>
                 <div className="flex items-center justify-between text-xs mb-1.5">
-                  <span className="font-medium text-[#F5F7FA]">
+                  <span className="font-medium text-[var(--rota-text)]">
                     {item.plataforma}
                   </span>
-                  <span className="font-semibold text-[#35D39A] tabular-nums">
+                  <span className="font-semibold text-[var(--rota-success)] tabular-nums">
                     {formatarMoeda(item.total)}
                   </span>
                 </div>
-                <div className="h-2.5 w-full overflow-hidden rounded-full bg-[#131A26]">
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--rota-track)]">
                   <div
-                    className="h-full rounded-full bg-[#70B7F0] transition-all duration-300"
+                    className="h-full rounded-full bg-[var(--rota-accent)] transition-all duration-300"
                     style={{ width: `${Math.min(100, item.percentual)}%` }}
                   />
                 </div>
@@ -614,16 +614,16 @@ export const Resumo: React.FC<ResumoProps> = ({
             {gastosPorCategoria.map((item) => (
               <div key={item.categoria}>
                 <div className="flex items-center justify-between text-xs mb-1.5">
-                  <span className="font-medium text-[#F5F7FA]">
+                  <span className="font-medium text-[var(--rota-text)]">
                     {item.categoria}
                   </span>
-                  <span className="font-semibold text-[#F07878] tabular-nums">
+                  <span className="font-semibold text-[var(--rota-danger)] tabular-nums">
                     {formatarMoeda(item.total)}
                   </span>
                 </div>
-                <div className="h-2.5 w-full overflow-hidden rounded-full bg-[#131A26]">
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--rota-track)]">
                   <div
-                    className="h-full rounded-full bg-[#F07878] transition-all duration-300"
+                    className="h-full rounded-full bg-[var(--rota-danger)] transition-all duration-300"
                     style={{ width: `${Math.min(100, item.percentual)}%` }}
                   />
                 </div>

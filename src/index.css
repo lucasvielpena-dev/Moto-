@@ -1,15 +1,52 @@
 @import "tailwindcss";
 
+/* ======================== SISTEMA DE DESIGN ========================
+   Paleta padronizada (tokens CSS), escala de raio e tipografia,
+   aplicados em todas as telas do app — acessíveis via var().         */
+:root {
+  /* Paleta */
+  --rota-bg: #0E131D;
+  --rota-surface: #171E2B;
+  --rota-surface-2: #1F2736;
+  --rota-surface-3: #2A3546;
+  --rota-track: #131A26;
+  --rota-line: rgba(255, 255, 255, 0.07);
+  --rota-text: #F5F7FA;
+  --rota-text-soft: #9AA6B8;
+  --rota-accent: #2672B5;
+  --rota-accent-soft: #3A86D0;
+  --rota-accent-strong: #3186D1;
+  --rota-accent-muted: rgba(58, 134, 208, 0.2);
+  --rota-success: #35D39A;
+  --rota-success-strong: rgba(53, 211, 154, 0.25);
+  --rota-success-soft: rgba(53, 211, 154, 0.18);
+  --rota-success-tint: rgba(53, 211, 154, 0.14);
+  --rota-danger: #F07878;
+  --rota-danger-text: #F48C8C;
+  --rota-danger-soft: rgba(240, 120, 120, 0.18);
+  --rota-danger-strong: rgba(240, 120, 120, 0.25);
+  --rota-danger-tint: rgba(240, 120, 120, 0.14);
+  --rota-warn: #F59E0B;
+
+  /* Escala de raio */
+  --rota-r-sm: 12px;
+  --rota-r-md: 16px;
+  --rota-r-lg: 24px;
+
+  /* Tipografia */
+  --rota-font: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
 @layer base {
   :root {
     color-scheme: dark;
-    font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: var(--rota-font);
   }
 
   html,
   body {
-    background-color: #0E131D;
-    color: #F5F7FA;
+    background-color: var(--rota-bg);
+    color: var(--rota-text);
     min-height: 100%;
     overflow-x: hidden;
     -webkit-tap-highlight-color: transparent;
@@ -21,24 +58,25 @@
 
 .app-canvas {
   position: relative;
-  background-color: #0E131D;
+  background-color: var(--rota-bg);
 }
 
-/* Cartão principal: 24px de raio, diferenciado por cor de superfície sem bordas pesadas */
+/* Cartão principal: superfície mais clara, linha sutil e raio maior */
 .neu-card {
-  background-color: #1B2432;
-  border-radius: 24px;
+  background-color: var(--rota-surface);
+  border: 1px solid var(--rota-line);
+  border-radius: var(--rota-r-lg);
 }
 
-/* Sub-cartão / indicador interno: 16px de raio */
+/* Sub-cartão / indicador interno */
 .neu-tile {
-  background-color: #273244;
-  border-radius: 16px;
+  background-color: var(--rota-surface-2);
+  border-radius: var(--rota-r-md);
 }
 
-/* Container discreto de ícone */
+/* Ícone em bloco */
 .icon-tile {
-  background-color: #273244;
+  background-color: var(--rota-surface-2);
   width: 40px;
   height: 40px;
   border-radius: 14px;
@@ -53,7 +91,7 @@
   line-height: 1.35rem;
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: #F5F7FA;
+  color: var(--rota-text);
 }
 
 .section-subtitle {
@@ -61,45 +99,45 @@
   line-height: 1.25rem;
   font-weight: 600;
   letter-spacing: -0.01em;
-  color: #F5F7FA;
+  color: var(--rota-text);
 }
 
-/* Campos internos e trilhos rebaixados (#273244, 16px de raio) */
+/* Campos internos */
 .neu-inset {
-  background-color: #273244;
-  border-radius: 16px;
+  background-color: var(--rota-surface-2);
+  border-radius: var(--rota-r-md);
   transition: box-shadow 150ms ease, background-color 150ms ease;
 }
 
 .neu-inset:focus-within {
-  box-shadow: 0 0 0 2px rgba(112, 183, 240, 0.55);
+  box-shadow: 0 0 0 2px rgba(38, 114, 181, 0.55);
 }
 
-/* Botões secundários sem borda pesada, 16px de raio */
+/* Botões secundários */
 .neu-btn-secondary {
-  background-color: #273244;
-  border-radius: 16px;
+  background-color: var(--rota-surface-2);
+  border-radius: var(--rota-r-md);
   transition: background-color 150ms ease, transform 150ms ease;
 }
 
 .neu-btn-secondary:hover {
-  background-color: #303D52;
+  background-color: var(--rota-surface-3);
 }
 
-/* Botão principal azul (#2672B5 / #3186D1 com contraste >= 4.5:1) */
+/* Botão principal */
 .btn-primary-glow {
-  background-color: #2672B5;
-  border-radius: 16px;
+  background-color: var(--rota-accent);
+  border-radius: var(--rota-r-md);
   transition: background-color 150ms ease, transform 150ms ease;
 }
 
 .btn-primary-glow:hover {
-  background-color: #3186D1;
+  background-color: var(--rota-accent-soft);
 }
 
-/* Seletor segmentado interno (16px) */
+/* Seletor segmentado */
 .tab-track {
-  background-color: #131A26;
+  background-color: var(--rota-track);
   display: grid;
   gap: 4px;
   padding: 4px;
@@ -133,16 +171,16 @@
 }
 
 .tab-item-active {
-  background-color: #2672B5;
-  color: #F5F7FA;
+  background-color: var(--rota-accent-strong);
+  color: var(--rota-text);
 }
 
 .tab-item-idle {
-  color: #9AA6B8;
+  color: var(--rota-text-soft);
 }
 
 .tab-item-idle:hover {
-  color: #F5F7FA;
+  color: var(--rota-text);
 }
 
 @media (prefers-reduced-motion: reduce) {

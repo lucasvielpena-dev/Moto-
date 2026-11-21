@@ -490,14 +490,14 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
     <section aria-labelledby="titulo-odometro" className="neu-card p-4 sm:p-6">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="icon-tile text-[#70B7F0]">
+          <div className="icon-tile text-[var(--rota-accent)]">
             <Navigation className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden="true" />
           </div>
           <div className="min-w-0">
             <h2 id="titulo-odometro" className="card-title">
               Odômetro
             </h2>
-            <p className="text-xs font-medium text-[#9AA6B8] truncate tabular-nums">
+            <p className="text-xs font-medium text-[var(--rota-text-soft)] truncate tabular-nums">
               {textoStatus}
               {(status === 'running' || tempoSegundos > 0) &&
                 ` · ${formatarDuracao(tempoSegundos)}`}
@@ -515,7 +515,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
         </div>
 
         {feedback ? (
-          <span className="inline-flex min-h-[44px] items-center gap-1 text-xs font-semibold text-[#35D39A] whitespace-nowrap shrink-0">
+          <span className="inline-flex min-h-[44px] items-center gap-1 text-xs font-semibold text-[var(--rota-success)] whitespace-nowrap shrink-0">
             <Check className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
             {feedback}
           </span>
@@ -527,13 +527,13 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
               setManualAberto((prev) => !prev);
               setErroManual(null);
             }}
-            className="neu-btn-secondary inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-2xl px-3.5 text-xs font-semibold text-[#F5F7FA] whitespace-nowrap active:scale-[0.98]"
+            className="neu-btn-secondary inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-2xl px-3.5 text-xs font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
           >
             Modo manual
             {manualAberto ? (
-              <ChevronUp className="h-4 w-4 text-[#70B7F0]" strokeWidth={1.75} aria-hidden="true" />
+              <ChevronUp className="h-4 w-4 text-[var(--rota-accent)]" strokeWidth={1.75} aria-hidden="true" />
             ) : (
-              <ChevronDown className="h-4 w-4 text-[#70B7F0]" strokeWidth={1.75} aria-hidden="true" />
+              <ChevronDown className="h-4 w-4 text-[var(--rota-accent)]" strokeWidth={1.75} aria-hidden="true" />
             )}
           </button>
         )}
@@ -541,27 +541,27 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
 
       {/* Leitura principal da distância */}
       <div className="my-4 sm:my-5 flex items-baseline justify-center gap-2 text-center">
-        <span className="text-4xl sm:text-5xl font-bold tracking-[-0.03em] text-[#F5F7FA] tabular-nums">
+        <span className="text-5xl sm:text-6xl font-bold tracking-[-0.03em] text-[var(--rota-text)] tabular-nums">
           {formatarKm(kmAtual)}
         </span>
-        <span className="text-base font-semibold text-[#70B7F0]">km</span>
+        <span className="text-lg font-semibold text-[var(--rota-accent)]">km</span>
       </div>
 
       {/* Mensagem de erro GPS traduzida */}
       {erroGps && (
         <div
           role="alert"
-          className="mb-4 rounded-2xl bg-[#F07878]/14 p-4 text-xs leading-relaxed text-[#F5F7FA]"
+          className="mb-4 rounded-2xl bg-[var(--rota-danger-tint)] p-4 text-xs leading-relaxed text-[var(--rota-text)]"
         >
           <div className="flex items-start gap-2.5">
             <AlertCircle
-              className="h-4 w-4 shrink-0 text-[#F07878] mt-0.5"
+              className="h-4 w-4 shrink-0 text-[var(--rota-danger)] mt-0.5"
               strokeWidth={1.75}
               aria-hidden="true"
             />
             <div className="space-y-1 min-w-0">
-              <p className="text-sm font-semibold text-[#F5F7FA]">{erroGps.mensagem}</p>
-              <p className="text-xs text-[#9AA6B8]">{erroGps.sugestao}</p>
+              <p className="text-sm font-semibold text-[var(--rota-text)]">{erroGps.mensagem}</p>
+              <p className="text-xs text-[var(--rota-text-soft)]">{erroGps.sugestao}</p>
             </div>
           </div>
 
@@ -571,7 +571,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
                 href={window.location.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="btn-primary-glow inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl px-4 text-xs font-semibold text-[#F5F7FA] whitespace-nowrap active:scale-[0.98]"
+                className="btn-primary-glow inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl px-4 text-xs font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
               >
                 <ExternalLink className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                 Abrir em nova aba
@@ -581,9 +581,9 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
               <button
                 type="button"
                 onClick={handleIniciarOuContinuar}
-                className="neu-btn-secondary inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl px-4 text-xs font-semibold text-[#F5F7FA] whitespace-nowrap active:scale-[0.98]"
+                className="neu-btn-secondary inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl px-4 text-xs font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
               >
-                <RefreshCw className="h-4 w-4 text-[#70B7F0]" strokeWidth={1.75} aria-hidden="true" />
+                <RefreshCw className="h-4 w-4 text-[var(--rota-accent)]" strokeWidth={1.75} aria-hidden="true" />
                 Tentar novamente
               </button>
             )}
@@ -597,16 +597,16 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
           <button
             type="button"
             onClick={handlePausar}
-            className="neu-btn-secondary flex-1 min-w-[116px] min-h-[48px] flex items-center justify-center gap-1.5 sm:gap-2 rounded-2xl px-3 sm:px-4 text-xs sm:text-sm font-semibold text-[#F5F7FA] whitespace-nowrap active:scale-[0.98]"
+            className="neu-btn-secondary flex-1 min-w-[116px] min-h-[48px] flex items-center justify-center gap-1.5 sm:gap-2 rounded-2xl px-3 sm:px-4 text-xs sm:text-sm font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
           >
-            <Pause className="h-4 w-4 shrink-0 text-[#70B7F0]" strokeWidth={1.75} aria-hidden="true" />
+            <Pause className="h-4 w-4 shrink-0 text-[var(--rota-accent)]" strokeWidth={1.75} aria-hidden="true" />
             Pausar
           </button>
         ) : (
           <button
             type="button"
             onClick={handleIniciarOuContinuar}
-            className="btn-primary-glow flex-1 min-w-[116px] min-h-[48px] flex items-center justify-center gap-1.5 sm:gap-2 rounded-2xl px-3 sm:px-4 text-xs sm:text-sm font-semibold text-[#F5F7FA] whitespace-nowrap active:scale-[0.98]"
+            className="btn-primary-glow flex-1 min-w-[116px] min-h-[48px] flex items-center justify-center gap-1.5 sm:gap-2 rounded-2xl px-3 sm:px-4 text-xs sm:text-sm font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
           >
             <Play className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
             {status === 'paused' ? 'Continuar' : 'Iniciar'}
@@ -620,9 +620,9 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
           className={`min-h-[48px] min-w-[124px] flex-1 flex items-center justify-center gap-1.5 sm:gap-2 rounded-2xl px-3 sm:px-4 text-xs sm:text-sm font-semibold whitespace-nowrap transition-colors duration-150 ${
             kmAtual > 0
               ? status === 'running'
-                ? 'btn-primary-glow text-[#F5F7FA] active:scale-[0.98]'
-                : 'bg-[#35D39A]/18 text-[#35D39A] hover:bg-[#35D39A]/25 active:scale-[0.98]'
-              : 'bg-[#242F40] text-[#94A1B3] cursor-not-allowed'
+                ? 'btn-primary-glow text-[var(--rota-text)] active:scale-[0.98]'
+                : 'bg-[var(--rota-success-soft)] text-[var(--rota-success)] hover:bg-[var(--rota-success-strong)] active:scale-[0.98]'
+              : 'bg-[var(--rota-surface-2)] text-[var(--rota-text-soft)] cursor-not-allowed'
           }`}
         >
           <Save className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
@@ -635,7 +635,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
             onClick={handleZerar}
             aria-label="Descartar trajeto atual"
             title="Descartar trajeto atual"
-            className="neu-btn-secondary flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-[#9AA6B8] hover:text-[#F07878] active:scale-[0.98]"
+            className="neu-btn-secondary flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-[var(--rota-text-soft)] hover:text-[var(--rota-danger)] active:scale-[0.98]"
           >
             <RotateCcw className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
           </button>
@@ -644,7 +644,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
 
       {/* Painel recolhível para modo manual (Distância ou Painel) */}
       {manualAberto && (
-        <form onSubmit={handleAdicionarManual} className="mt-4 pt-4 border-t border-white/8">
+        <form onSubmit={handleAdicionarManual} className="mt-4 pt-4 border-t border-[var(--rota-line)]">
           <div
             role="tablist"
             aria-label="Modo de entrada manual de quilômetros"
@@ -693,13 +693,13 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
                     if (erroManual) setErroManual(null);
                   }}
                   placeholder="Ex: 38,5"
-                  className="w-full bg-transparent text-sm font-semibold text-[#F5F7FA] placeholder:text-[#9AA6B8]/60 focus:outline-none tabular-nums"
+                  className="w-full bg-transparent text-sm font-semibold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
                 />
-                <span className="ml-2 text-xs font-semibold text-[#9AA6B8]">km</span>
+                <span className="ml-2 text-xs font-semibold text-[var(--rota-text-soft)]">km</span>
               </div>
               <button
                 type="submit"
-                className="btn-primary-glow flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-2xl px-4 text-xs font-semibold text-[#F5F7FA] whitespace-nowrap active:scale-[0.98]"
+                className="btn-primary-glow flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-2xl px-4 text-xs font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
               >
                 <Plus className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                 Adicionar
@@ -711,7 +711,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
                 <div>
                   <label
                     htmlFor="input-km-inicial"
-                    className="block text-xs font-medium text-[#9AA6B8] mb-1.5"
+                    className="block text-xs font-medium text-[var(--rota-text-soft)] mb-1.5"
                   >
                     Km inicial
                   </label>
@@ -726,7 +726,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
                         if (erroManual) setErroManual(null);
                       }}
                       placeholder="Ex: 42150"
-                      className="w-full bg-transparent text-sm font-semibold text-[#F5F7FA] placeholder:text-[#9AA6B8]/60 focus:outline-none tabular-nums"
+                      className="w-full bg-transparent text-sm font-semibold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
                     />
                   </div>
                 </div>
@@ -734,7 +734,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
                 <div>
                   <label
                     htmlFor="input-km-final"
-                    className="block text-xs font-medium text-[#9AA6B8] mb-1.5"
+                    className="block text-xs font-medium text-[var(--rota-text-soft)] mb-1.5"
                   >
                     Km final
                   </label>
@@ -749,18 +749,18 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
                         if (erroManual) setErroManual(null);
                       }}
                       placeholder="Ex: 42238"
-                      className="w-full bg-transparent text-sm font-semibold text-[#F5F7FA] placeholder:text-[#9AA6B8]/60 focus:outline-none tabular-nums"
+                      className="w-full bg-transparent text-sm font-semibold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
                     />
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-[#9AA6B8] tabular-nums">
+                <span className="text-xs font-medium text-[var(--rota-text-soft)] tabular-nums">
                   {distanciaPainelValida !== null ? (
                     <>
                       Distância:{' '}
-                      <strong className="font-semibold text-[#70B7F0]">
+                      <strong className="font-semibold text-[var(--rota-accent)]">
                         {formatarKm(distanciaPainelValida)} km
                       </strong>
                     </>
@@ -771,7 +771,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
 
                 <button
                   type="submit"
-                  className="btn-primary-glow flex min-h-[44px] items-center justify-center gap-1.5 rounded-2xl px-4 text-xs font-semibold text-[#F5F7FA] whitespace-nowrap shrink-0 active:scale-[0.98]"
+                  className="btn-primary-glow flex min-h-[44px] items-center justify-center gap-1.5 rounded-2xl px-4 text-xs font-semibold text-[var(--rota-text)] whitespace-nowrap shrink-0 active:scale-[0.98]"
                 >
                   <Plus className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                   Salvar km
@@ -781,11 +781,10 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
           )}
 
           {erroManual && (
-            <p className="mt-2 text-xs text-[#F07878]">{erroManual}</p>
+            <p className="mt-2 text-xs text-[var(--rota-danger)]">{erroManual}</p>
           )}
         </form>
       )}
     </section>
   );
 };
-
