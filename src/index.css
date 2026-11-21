@@ -145,10 +145,6 @@
   color: #F5F7FA;
 }
 
-.km-glow {
-  text-shadow: none;
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

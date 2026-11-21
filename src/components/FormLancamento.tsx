@@ -358,17 +358,10 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
             </button>
           </div>
 
-          {modoRapido ? (
-            <div className="space-y-2">
-              {gradeAtalhosValor}
-              {campoValor}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {campoValor}
-              {gradeAtalhosValor}
-            </div>
-          )}
+          <div className="space-y-2">
+            {campoValor}
+            {gradeAtalhosValor}
+          </div>
 
           {erro && <p className="mt-2 text-xs text-[#F48C8C]">{erro}</p>}
         </div>
