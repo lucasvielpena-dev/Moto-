@@ -82,9 +82,10 @@
   background-color: var(--rota-bg);
 }
 
-/* Cartão principal: superfície mais clara, raio maior e sem borda — cards formam um bloco único */
+/* Cartão principal: superfície mais clara, raio maior e hairline sutil de separação visual — as páginas continuam juntas (sem gaps) */
 .neu-card {
   background-color: var(--rota-surface);
+  border: 1px solid var(--rota-line);
   border-radius: var(--rota-r-lg);
 }
 
