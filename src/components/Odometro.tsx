@@ -634,7 +634,7 @@ export const Odometro: React.FC<OdometroProps> = ({
           status === 'running' && velocidadeKmh !== null && velocidadeKmh > 0
             ? ` · ${velocidadeKmh} km/h`
             : ''
-        }${entregaAtiva ? ` · Entrega ${formatarKm(kmEntregaAtual)} km` : ''}`;
+        }`;
 
   const textoStatusSheet =
     status === 'running'
@@ -651,66 +651,116 @@ export const Odometro: React.FC<OdometroProps> = ({
       {!oculto && (
         <div
           onClick={() => setSheetAberto(true)}
-          className="rota-card flex cursor-pointer items-center justify-between gap-2.5 px-3.5 sm:px-4 py-3"
+          className="rota-card cursor-pointer px-3.5 sm:px-4 py-2.5 space-y-2"
         >
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setSheetAberto(true);
-            }}
-            aria-label={`${rotuloTopoOdometro}: ${formatarKm(kmAtual)} km. Toque para detalhes.`}
-            className="flex min-w-0 flex-1 flex-col items-start overflow-hidden text-left"
-          >
-            <span className="max-w-full truncate text-[13px] leading-[18px] font-bold text-[var(--rota-text-soft)]">
-              {rotuloTopoOdometro}
-            </span>
-
-            <div
-              className="mt-1 flex max-w-full flex-nowrap items-baseline gap-[3px] sm:gap-[4px]"
-              aria-hidden="true"
+          <div className="flex items-center justify-between gap-2.5">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSheetAberto(true);
+              }}
+              aria-label={`${rotuloTopoOdometro}: ${formatarKm(kmAtual)} km. Toque para detalhes.`}
+              className="flex min-w-0 flex-1 flex-col items-start overflow-hidden text-left"
             >
-              {digitosInteiros.map((digito, idx) => (
-                <span key={idx} className="rota-odo-digit">
-                  {digito}
+              <span className="max-w-full truncate text-[13px] leading-[18px] font-bold text-[var(--rota-text-soft)]">
+                {rotuloTopoOdometro}
+              </span>
+
+              <div
+                className="mt-1 flex max-w-full flex-nowrap items-baseline gap-[3px] sm:gap-[4px]"
+                aria-hidden="true"
+              >
+                {digitosInteiros.map((digito, idx) => (
+                  <span key={idx} className="rota-odo-digit">
+                    {digito}
+                  </span>
+                ))}
+                <span className="text-[22px] leading-none font-extrabold text-[var(--rota-text)]">
+                  ,
                 </span>
-              ))}
-              <span className="text-[22px] leading-none font-extrabold text-[var(--rota-text)]">
-                ,
-              </span>
-              <span className="rota-odo-digit-decimal">{parteDecimal}</span>
-              <span className="ml-0.5 shrink-0 text-[14px] sm:text-[15px] leading-none font-extrabold text-[var(--rota-text-soft)]">
-                km
-              </span>
-            </div>
+                <span className="rota-odo-digit-decimal">{parteDecimal}</span>
+                <span className="ml-0.5 shrink-0 text-[14px] sm:text-[15px] leading-none font-extrabold text-[var(--rota-text-soft)]">
+                  km
+                </span>
+              </div>
 
-            <span className="mt-1 w-full truncate text-[13px] leading-[18px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
-              {subtituloFaixa}
-            </span>
-          </button>
+              <span className="mt-1 w-full truncate text-[13px] leading-[18px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
+                {subtituloFaixa}
+              </span>
+            </button>
 
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (status === 'running') {
-                handlePausar();
-              } else {
-                handleIniciarOuContinuar();
-              }
-            }}
-            className={`inline-flex h-[48px] min-w-[92px] sm:min-w-[100px] shrink-0 items-center justify-center rounded-[14px] px-3 text-[14px] font-extrabold whitespace-nowrap active:scale-[0.98] ${
-              status === 'running'
-                ? 'bg-[var(--rota-surface-2)] text-[var(--rota-text)]'
-                : 'bg-[var(--rota-accent)] text-[var(--rota-on-accent)]'
-            }`}
-          >
-            {status === 'running'
-              ? 'Pausar'
-              : status === 'paused'
-                ? 'Continuar'
-                : 'Iniciar'}
-          </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (status === 'running') {
+                  handlePausar();
+                } else {
+                  handleIniciarOuContinuar();
+                }
+              }}
+              className={`inline-flex h-[48px] min-w-[92px] sm:min-w-[100px] shrink-0 items-center justify-center rounded-[14px] px-3 text-[14px] font-extrabold whitespace-nowrap active:scale-[0.98] ${
+                status === 'running'
+                  ? 'bg-[var(--rota-surface-2)] text-[var(--rota-text)]'
+                  : 'bg-[var(--rota-accent)] text-[var(--rota-on-accent)]'
+              }`}
+            >
+              {status === 'running'
+                ? 'Pausar'
+                : status === 'paused'
+                  ? 'Continuar'
+                  : 'Iniciar'}
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between gap-2.5 border-t border-[var(--rota-line)] pt-2">
+            {entregaAtiva ? (
+              <>
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] leading-[18px] font-extrabold text-[var(--rota-success)] tabular-nums">
+                    Em entrega · {formatarKm(kmEntregaAtual)} km
+                  </span>
+                  <span className="block truncate text-[13px] leading-[18px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
+                    {formatarDuracao(tempoEntregaAtual)}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAbrirModalEntrega();
+                  }}
+                  className="inline-flex h-[48px] shrink-0 items-center justify-center rounded-[14px] bg-[var(--rota-accent)] px-3.5 text-[13px] font-extrabold text-[var(--rota-on-accent)] whitespace-nowrap active:scale-[0.98]"
+                >
+                  Finalizar entrega
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] leading-[18px] font-bold text-[var(--rota-text)]">
+                    Recorte por entrega
+                  </span>
+                  <span className="block truncate text-[13px] leading-[18px] font-semibold text-[var(--rota-text-soft)]">
+                    {status === 'running'
+                      ? 'Em deslocamento'
+                      : 'Toque ao pegar o pedido'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleIniciarEntrega();
+                  }}
+                  className="inline-flex h-[48px] shrink-0 items-center justify-center rounded-[14px] bg-[var(--rota-accent-tint)] px-3.5 text-[13px] font-extrabold text-[var(--rota-accent)] whitespace-nowrap active:scale-[0.98]"
+                >
+                  Iniciar entrega
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
 

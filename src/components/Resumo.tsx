@@ -17,6 +17,7 @@ interface ResumoProps {
   todosLancamentos: Lancamento[];
   trajetos: Trajeto[];
   kmEmAndamento?: number;
+  kmEntregaEmAndamento?: number;
   tempoEmAndamentoSegundos?: number;
   reservaKm?: number;
   reservaMes?: number;
@@ -53,6 +54,7 @@ export const Resumo: React.FC<ResumoProps> = ({
   todosLancamentos,
   trajetos,
   kmEmAndamento = 0,
+  kmEntregaEmAndamento = 0,
   tempoEmAndamentoSegundos = 0,
   reservaKm = 0,
   reservaMes = 0,
@@ -84,10 +86,17 @@ export const Resumo: React.FC<ResumoProps> = ({
     [lancamentos]
   );
 
-  const kmEntregas = entregasComKm.reduce(
+  const kmEntregasSalvos = entregasComKm.reduce(
     (acc, l) => acc + (l.kmEntrega ?? 0),
     0
   );
+  const kmEntregas = kmEntregasSalvos + kmEntregaEmAndamento;
+  const kmDeslocamento = Math.max(0, totalKm - kmEntregas);
+  const percentualKmEntrega =
+    totalKm > 0 ? Math.min(100, (kmEntregas / totalKm) * 100) : 0;
+  const percentualKmDeslocamento =
+    totalKm > 0 ? Math.max(0, 100 - percentualKmEntrega) : 0;
+
   const receitaEntregas = entregasComKm.reduce((acc, l) => acc + l.valor, 0);
 
   const modoEntregas = visaoKm === 'entregas';
@@ -391,6 +400,48 @@ export const Resumo: React.FC<ResumoProps> = ({
             </span>
           </div>
         )}
+      </section>
+
+      {/* Cartão Separação de km: Em entrega vs Deslocamento */}
+      <section
+        aria-label="Separação de quilômetros"
+        className="rota-card px-4 py-3.5 space-y-2.5"
+      >
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-[15px] font-extrabold text-[var(--rota-text)]">
+            Km em entrega vs deslocamento
+          </h2>
+          <span className="text-[13px] font-bold text-[var(--rota-text-soft)] tabular-nums">
+            {formatarKm(totalKm)} km total
+          </span>
+        </div>
+
+        <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--rota-surface-2)]">
+          <div
+            className="h-full rounded-full bg-[var(--rota-accent)] transition-all duration-300"
+            style={{ width: `${percentualKmEntrega}%` }}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 divide-x divide-[var(--rota-line)] pt-0.5">
+          <div className="min-w-0 pr-3">
+            <span className="block text-[13px] font-bold text-[var(--rota-text-soft)] tabular-nums">
+              Em entrega ({Math.round(percentualKmEntrega)}%)
+            </span>
+            <span className="mt-0.5 block truncate text-[18px] leading-[22px] font-extrabold text-[var(--rota-accent)] tabular-nums">
+              {formatarKm(kmEntregas)} km
+            </span>
+          </div>
+
+          <div className="min-w-0 pl-3">
+            <span className="block text-[13px] font-bold text-[var(--rota-text-soft)] tabular-nums">
+              Deslocamento ({Math.round(percentualKmDeslocamento)}%)
+            </span>
+            <span className="mt-0.5 block truncate text-[18px] leading-[22px] font-extrabold text-[var(--rota-text)] tabular-nums">
+              {formatarKm(kmDeslocamento)} km
+            </span>
+          </div>
+        </div>
       </section>
 
       {/* Cartão de 3 colunas: Ganhos, Gastos, Lucro (+ Reservas no Mês) */}

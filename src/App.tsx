@@ -454,6 +454,8 @@ export default function App() {
 
   const kmEmAndamento =
     odometroInfo.status !== 'idle' ? odometroInfo.km : 0;
+  const kmEntregaEmAndamento =
+    odometroInfo.entregaAtiva ? odometroInfo.kmEntregaAtual : 0;
   const tempoEmAndamentoSegundos =
     odometroInfo.status !== 'idle' ? odometroInfo.tempoSegundos : 0;
 
@@ -475,10 +477,20 @@ export default function App() {
       (acc, l) => acc + obterEntregasLancamento(l),
       0
     );
+    const kmEmEntregaSalvos = ganhosLista.reduce(
+      (acc, l) =>
+        acc +
+        (typeof l.kmEntrega === 'number' && l.kmEntrega > 0
+          ? l.kmEntrega
+          : 0),
+      0
+    );
     const gastos = lancamentosHoje
       .filter((l) => l.tipo === TipoLancamento.GASTO)
       .reduce((acc, l) => acc + l.valor, 0);
     const km = trajHoje.reduce((acc, t) => acc + t.km, 0) + kmEmAndamento;
+    const kmEmEntrega = kmEmEntregaSalvos + kmEntregaEmAndamento;
+    const kmDeslocamento = Math.max(0, km - kmEmEntrega);
     const tempoTotalSegundos =
       trajHoje.reduce((acc, t) => acc + (t.duracaoSegundos ?? 0), 0) +
       tempoEmAndamentoSegundos;
@@ -487,10 +499,18 @@ export default function App() {
       gastos,
       lucro: ganhos - gastos,
       km,
+      kmEmEntrega,
+      kmDeslocamento,
       entregas,
       tempoTotalSegundos,
     };
-  }, [lancamentosHoje, trajetos, kmEmAndamento, tempoEmAndamentoSegundos]);
+  }, [
+    lancamentosHoje,
+    trajetos,
+    kmEmAndamento,
+    kmEntregaEmAndamento,
+    tempoEmAndamentoSegundos,
+  ]);
 
   const ultimosDoisLancamentos = useMemo(
     () => lancamentosHoje.slice(0, 2),
@@ -529,12 +549,12 @@ export default function App() {
 
   const paddingBottomClass =
     abaAtiva === 'hoje'
-      ? 'pb-[calc(140px+env(safe-area-inset-bottom))]'
+      ? 'pb-[calc(136px+env(safe-area-inset-bottom))]'
       : 'pb-[calc(84px+env(safe-area-inset-bottom))]';
 
   return (
     <div
-      className={`rota-no-print min-h-[100dvh] w-full overflow-x-hidden bg-[var(--rota-bg)] px-4 pt-2.5 ${paddingBottomClass}`}
+      className={`rota-no-print min-h-[100dvh] w-full overflow-x-hidden bg-[var(--rota-bg)] px-4 pt-2 ${paddingBottomClass}`}
     >
       <main className="mx-auto w-full max-w-[460px]">
         {/* Aba 1: Hoje */}
@@ -652,43 +672,60 @@ export default function App() {
             </div>
           </section>
 
-          {/* 3. Cartão com 3 colunas: Gastos, Lucro, Distância */}
+          {/* 3. Cartão com 3 colunas: Gastos, Lucro, Distância + separação Em entrega / Deslocamento */}
           <section
             aria-label="Resumo rápido de hoje"
-            className="rota-card grid grid-cols-3 divide-x divide-[var(--rota-line)] px-4 py-2.5"
+            className="rota-card px-4 py-2.5"
           >
-            <div className="min-w-0 pr-2">
-              <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
-                Gastos
-              </span>
-              <span className="mt-0.5 block truncate text-[20px] leading-[24px] font-extrabold text-[var(--rota-danger)] tabular-nums">
-                {formatarMoeda(resumoHoje.gastos)}
-              </span>
+            <div className="grid grid-cols-3 divide-x divide-[var(--rota-line)]">
+              <div className="min-w-0 pr-2">
+                <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
+                  Gastos
+                </span>
+                <span className="mt-0.5 block truncate text-[20px] leading-[24px] font-extrabold text-[var(--rota-danger)] tabular-nums">
+                  {formatarMoeda(resumoHoje.gastos)}
+                </span>
+              </div>
+
+              <div className="min-w-0 px-2.5">
+                <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
+                  Lucro
+                </span>
+                <span
+                  className={`mt-0.5 block truncate text-[20px] leading-[24px] font-extrabold tabular-nums ${
+                    resumoHoje.lucro > 0
+                      ? 'text-[var(--rota-success)]'
+                      : resumoHoje.lucro < 0
+                        ? 'text-[var(--rota-danger)]'
+                        : 'text-[var(--rota-text)]'
+                  }`}
+                >
+                  {formatarMoeda(resumoHoje.lucro)}
+                </span>
+              </div>
+
+              <div className="min-w-0 pl-2.5">
+                <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
+                  Distância
+                </span>
+                <span className="mt-0.5 block truncate text-[20px] leading-[24px] font-extrabold text-[var(--rota-text)] tabular-nums">
+                  {formatarKm(resumoHoje.km)} km
+                </span>
+              </div>
             </div>
 
-            <div className="min-w-0 px-2.5">
-              <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
-                Lucro
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-[var(--rota-line)] pt-2 text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
+              <span>
+                Em entrega:{' '}
+                <strong className="font-extrabold text-[var(--rota-text)]">
+                  {formatarKm(resumoHoje.kmEmEntrega)} km
+                </strong>
               </span>
-              <span
-                className={`mt-0.5 block truncate text-[20px] leading-[24px] font-extrabold tabular-nums ${
-                  resumoHoje.lucro > 0
-                    ? 'text-[var(--rota-success)]'
-                    : resumoHoje.lucro < 0
-                      ? 'text-[var(--rota-danger)]'
-                      : 'text-[var(--rota-text)]'
-                }`}
-              >
-                {formatarMoeda(resumoHoje.lucro)}
-              </span>
-            </div>
-
-            <div className="min-w-0 pl-2.5">
-              <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
-                Distância
-              </span>
-              <span className="mt-0.5 block truncate text-[20px] leading-[24px] font-extrabold text-[var(--rota-text)] tabular-nums">
-                {formatarKm(resumoHoje.km)} km
+              <span>
+                Deslocamento:{' '}
+                <strong className="font-extrabold text-[var(--rota-text)]">
+                  {formatarKm(resumoHoje.kmDeslocamento)} km
+                </strong>
               </span>
             </div>
           </section>
@@ -807,6 +844,7 @@ export default function App() {
               todosLancamentos={lancamentos}
               trajetos={trajetosDoPeriodo}
               kmEmAndamento={kmEmAndamento}
+              kmEntregaEmAndamento={kmEntregaEmAndamento}
               tempoEmAndamentoSegundos={tempoEmAndamentoSegundos}
               reservaKm={reservaKm}
               reservaMes={reservaMes}
