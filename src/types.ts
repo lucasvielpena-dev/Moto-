@@ -32,6 +32,7 @@ export interface Lancamento {
   observacao?: string;
   kmEntrega?: number;
   duracaoEntregaSegundos?: number;
+  entregas?: number;
 }
 
 export interface Trajeto {
@@ -40,6 +41,12 @@ export interface Trajeto {
   km: number;
   origem: 'gps' | 'manual';
   duracaoSegundos?: number;
+}
+
+export interface Vencimento {
+  id: string;
+  nome: string;
+  dataVencimento: string; // YYYY-MM-DD
 }
 
 export type StatusOdometro = 'idle' | 'running' | 'paused';

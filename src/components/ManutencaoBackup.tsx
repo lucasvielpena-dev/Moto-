@@ -1,16 +1,37 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Lancamento, Trajeto } from '../types';
-import { formatarKm, parseValorNumerico } from '../utils/formatters';
+import { Pencil, Printer, Share2, Trash2 } from 'lucide-react';
+import { Lancamento, Trajeto, Vencimento } from '../types';
+import {
+  formatarKm,
+  formatarMoeda,
+  parseValorNumerico,
+} from '../utils/formatters';
 import {
   BackupRota,
   ConfigTrocaOleo,
   PreferenciaTema,
   carregarConfigOleo,
   gerarConteudoCsv,
+  gerarId,
   salvarConfigOleo,
   validarEConverterBackupJson,
 } from '../utils/storage';
+import {
+  SUGESTOES_VENCIMENTO,
+  calcularDiasParaVencimento,
+  formatarDataVencimento,
+} from '../utils/vencimentos';
 import { PWAInstallButton } from './PWAInstallButton';
+import { RelatorioMensalModal } from './RelatorioMensalModal';
+
+interface ResumoHojeCompartilhar {
+  ganhos: number;
+  gastos: number;
+  lucro: number;
+  km: number;
+  entregas: number;
+  lucroPorKm: number;
+}
 
 interface ManutencaoBackupProps {
   tema: PreferenciaTema;
@@ -21,16 +42,26 @@ interface ManutencaoBackupProps {
   onMudarMetaDiaria: (meta: number) => void;
   minLucroKm: number;
   onMudarMinLucroKm: (valor: number) => void;
+  reservaKm: number;
+  onMudarReservaKm: (valor: number) => void;
+  reservaMes: number;
+  onMudarReservaMes: (valor: number) => void;
+  vencimentos: Vencimento[];
+  onMudarVencimentos: (vencimentos: Vencimento[]) => void;
   percentualReserva: number;
   configOleoExterna?: ConfigTrocaOleo;
   onMudarConfigOleo?: (config: ConfigTrocaOleo) => void;
+  resumoHoje: ResumoHojeCompartilhar;
   onRestaurarBackup: (
     lancamentos: Lancamento[],
     trajetos: Trajeto[],
     metaDiaria: number,
     configOleo?: ConfigTrocaOleo,
     percentualReserva?: number,
-    minLucroKm?: number
+    minLucroKm?: number,
+    reservaKm?: number,
+    reservaMes?: number,
+    vencimentos?: Vencimento[]
   ) => void;
 }
 
@@ -44,6 +75,31 @@ function baixarArquivo(conteudo: string, nomeArquivo: string, mime: string) {
   link.click();
   document.body.removeChild(link);
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function copiarTextoAreaTransferencia(texto: string): Promise<boolean> {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(texto);
+      return true;
+    } catch {
+      // fallback below
+    }
+  }
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = texto;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 const OPCOES_TEMA: { valor: PreferenciaTema; rotulo: string }[] = [
@@ -61,9 +117,16 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
   onMudarMetaDiaria,
   minLucroKm,
   onMudarMinLucroKm,
+  reservaKm,
+  onMudarReservaKm,
+  reservaMes,
+  onMudarReservaMes,
+  vencimentos,
+  onMudarVencimentos,
   percentualReserva,
   configOleoExterna,
   onMudarConfigOleo,
+  resumoHoje,
   onRestaurarBackup,
 }) => {
   const [configOleoInterna, setConfigOleoInterna] = useState<ConfigTrocaOleo>(
@@ -77,6 +140,12 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
   const [minLucroTexto, setMinLucroTexto] = useState<string>(() =>
     minLucroKm > 0 ? minLucroKm.toFixed(2).replace('.', ',') : ''
   );
+  const [reservaKmTexto, setReservaKmTexto] = useState<string>(() =>
+    reservaKm > 0 ? reservaKm.toFixed(2).replace('.', ',') : ''
+  );
+  const [reservaMesTexto, setReservaMesTexto] = useState<string>(() =>
+    reservaMes > 0 ? reservaMes.toFixed(2).replace('.', ',') : ''
+  );
   const [intervaloOleoTexto, setIntervaloOleoTexto] = useState<string>(() =>
     String(configOleo.intervaloKm)
   );
@@ -84,6 +153,17 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
     texto: string;
     erro?: boolean;
   } | null>(null);
+  const [relatorioMesAberto, setRelatorioMesAberto] = useState<boolean>(false);
+
+  // Vencimentos UI state
+  const [editandoVencimentoId, setEditandoVencimentoId] = useState<
+    string | null
+  >(null);
+  const [vencimentoNome, setVencimentoNome] = useState<string>('');
+  const [vencimentoData, setVencimentoData] = useState<string>('');
+  const [erroVencimento, setErroVencimento] = useState<string | null>(null);
+  const inputVencimentoDataRef = useRef<HTMLInputElement | null>(null);
+
   const inputRestoreRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -116,6 +196,32 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minLucroKm]);
 
+  useEffect(() => {
+    const parsed = parseValorNumerico(reservaKmTexto);
+    if (reservaKm <= 0 && reservaKmTexto.trim() !== '') {
+      setReservaKmTexto('');
+    } else if (
+      reservaKm > 0 &&
+      (Number.isNaN(parsed) || Math.abs(parsed - reservaKm) > 0.009)
+    ) {
+      setReservaKmTexto(reservaKm.toFixed(2).replace('.', ','));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reservaKm]);
+
+  useEffect(() => {
+    const parsed = parseValorNumerico(reservaMesTexto);
+    if (reservaMes <= 0 && reservaMesTexto.trim() !== '') {
+      setReservaMesTexto('');
+    } else if (
+      reservaMes > 0 &&
+      (Number.isNaN(parsed) || Math.abs(parsed - reservaMes) > 0.009)
+    ) {
+      setReservaMesTexto(reservaMes.toFixed(2).replace('.', ','));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reservaMes]);
+
   const handleMetaChange = (valorDigitado: string) => {
     setMetaTexto(valorDigitado);
     if (!valorDigitado.trim()) {
@@ -138,6 +244,32 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
     const parsed = parseValorNumerico(valorDigitado);
     if (!Number.isNaN(parsed) && parsed >= 0) {
       onMudarMinLucroKm(Number(parsed.toFixed(2)));
+    }
+  };
+
+  const handleReservaKmChange = (valorDigitado: string) => {
+    setReservaKmTexto(valorDigitado);
+    const limpo = valorDigitado.trim().replace(',', '.');
+    if (limpo === '' || Number(limpo) === 0) {
+      onMudarReservaKm(0);
+      return;
+    }
+    const parsed = parseValorNumerico(valorDigitado);
+    if (!Number.isNaN(parsed) && parsed >= 0) {
+      onMudarReservaKm(Number(parsed.toFixed(2)));
+    }
+  };
+
+  const handleReservaMesChange = (valorDigitado: string) => {
+    setReservaMesTexto(valorDigitado);
+    const limpo = valorDigitado.trim().replace(',', '.');
+    if (limpo === '' || Number(limpo) === 0) {
+      onMudarReservaMes(0);
+      return;
+    }
+    const parsed = parseValorNumerico(valorDigitado);
+    if (!Number.isNaN(parsed) && parsed >= 0) {
+      onMudarReservaMes(Number(parsed.toFixed(2)));
     }
   };
 
@@ -192,6 +324,20 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
       : 0;
   const oleoVencido = kmDesdeTrocaOleo >= configOleo.intervaloKm;
 
+  const criarPayloadBackup = (): BackupRota => ({
+    versao: 1,
+    exportadoEm: new Date().toISOString(),
+    metaDiaria,
+    minLucroKm,
+    reservaKm,
+    reservaMes,
+    percentualReserva,
+    configOleo,
+    vencimentos: vencimentos.length > 0 ? vencimentos : undefined,
+    lancamentos: todosLancamentos,
+    trajetos: todosTrajetos,
+  });
+
   const handleExportarCsv = () => {
     if (todosLancamentos.length === 0 && todosTrajetos.length === 0) {
       exibirMensagemBackup('Não há dados para exportar ainda.', true);
@@ -209,22 +355,82 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
 
   const handleSalvarBackup = () => {
     const dataStr = new Date().toISOString().slice(0, 10);
-    const payload: BackupRota = {
-      versao: 1,
-      exportadoEm: new Date().toISOString(),
-      metaDiaria,
-      minLucroKm,
-      percentualReserva,
-      configOleo,
-      lancamentos: todosLancamentos,
-      trajetos: todosTrajetos,
-    };
+    const payload = criarPayloadBackup();
     baixarArquivo(
       JSON.stringify(payload, null, 2),
       `rota-backup-${dataStr}.json`,
       'application/json'
     );
     exibirMensagemBackup('Backup salvo no aparelho!');
+  };
+
+  const handleCompartilharBackup = async () => {
+    const dataStr = new Date().toISOString().slice(0, 10);
+    const nomeArquivo = `rota-backup-${dataStr}.json`;
+    const json = JSON.stringify(criarPayloadBackup(), null, 2);
+
+    try {
+      const arquivo = new File([json], nomeArquivo, {
+        type: 'application/json',
+      });
+      if (
+        typeof navigator !== 'undefined' &&
+        typeof navigator.share === 'function' &&
+        typeof navigator.canShare === 'function' &&
+        navigator.canShare({ files: [arquivo] })
+      ) {
+        await navigator.share({
+          files: [arquivo],
+          title: 'Backup Rota',
+        });
+        exibirMensagemBackup('Backup compartilhado!');
+        return;
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
+      }
+    }
+
+    baixarArquivo(json, nomeArquivo, 'application/json');
+    exibirMensagemBackup('Backup baixado no aparelho!');
+  };
+
+  const handleCompartilharResumoDia = async () => {
+    const dataHoje = new Date().toLocaleDateString('pt-BR');
+    const lucroKmTexto =
+      resumoHoje.km > 0 ? formatarMoeda(resumoHoje.lucroPorKm) : '—';
+    const texto = [
+      `Rota — Resumo de hoje (${dataHoje})`,
+      `Ganhos: ${formatarMoeda(resumoHoje.ganhos)}`,
+      `Gastos: ${formatarMoeda(resumoHoje.gastos)}`,
+      `Lucro: ${formatarMoeda(resumoHoje.lucro)}`,
+      `Distância: ${formatarKm(resumoHoje.km)} km`,
+      `Entregas: ${resumoHoje.entregas}`,
+      `Lucro por km: ${lucroKmTexto}`,
+    ].join('\n');
+
+    if (
+      typeof navigator !== 'undefined' &&
+      typeof navigator.share === 'function'
+    ) {
+      try {
+        await navigator.share({ text: texto });
+        exibirMensagemBackup('Resumo compartilhado!');
+        return;
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          return;
+        }
+      }
+    }
+
+    const copiado = await copiarTextoAreaTransferencia(texto);
+    if (copiado) {
+      exibirMensagemBackup('Resumo copiado!');
+    } else {
+      exibirMensagemBackup('Não foi possível copiar o resumo.', true);
+    }
   };
 
   const handleArquivoBackupSelecionado = async (
@@ -248,7 +454,10 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
         backup.metaDiaria,
         backup.configOleo,
         backup.percentualReserva,
-        backup.minLucroKm
+        backup.minLucroKm,
+        backup.reservaKm,
+        backup.reservaMes,
+        backup.vencimentos
       );
 
       if (backup.configOleo) {
@@ -259,6 +468,76 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
       exibirMensagemBackup('Dados restaurados com sucesso!');
     } catch {
       exibirMensagemBackup('Não foi possível ler o arquivo.', true);
+    }
+  };
+
+  const vencimentosOrdenados = useMemo(
+    () =>
+      [...vencimentos].sort((a, b) =>
+        a.dataVencimento.localeCompare(b.dataVencimento)
+      ),
+    [vencimentos]
+  );
+
+  const handleSelecionarSugestaoVencimento = (sugestao: string) => {
+    setEditandoVencimentoId(null);
+    setVencimentoNome(sugestao);
+    setErroVencimento(null);
+    window.setTimeout(() => {
+      inputVencimentoDataRef.current?.focus();
+    }, 30);
+  };
+
+  const handleEditarVencimento = (item: Vencimento) => {
+    setEditandoVencimentoId(item.id);
+    setVencimentoNome(item.nome);
+    setVencimentoData(item.dataVencimento);
+    setErroVencimento(null);
+  };
+
+  const handleSalvarVencimento = (e: React.FormEvent) => {
+    e.preventDefault();
+    const nomeLimpo = vencimentoNome.trim();
+    if (!nomeLimpo) {
+      setErroVencimento('Informe o nome do documento.');
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(vencimentoData)) {
+      setErroVencimento('Escolha a data de vencimento.');
+      return;
+    }
+
+    if (editandoVencimentoId) {
+      onMudarVencimentos(
+        vencimentos.map((v) =>
+          v.id === editandoVencimentoId
+            ? { ...v, nome: nomeLimpo, dataVencimento: vencimentoData }
+            : v
+        )
+      );
+    } else {
+      onMudarVencimentos([
+        ...vencimentos,
+        {
+          id: gerarId(),
+          nome: nomeLimpo,
+          dataVencimento: vencimentoData,
+        },
+      ]);
+    }
+
+    setEditandoVencimentoId(null);
+    setVencimentoNome('');
+    setVencimentoData('');
+    setErroVencimento(null);
+  };
+
+  const handleExcluirVencimento = (id: string) => {
+    onMudarVencimentos(vencimentos.filter((v) => v.id !== id));
+    if (editandoVencimentoId === id) {
+      setEditandoVencimentoId(null);
+      setVencimentoNome('');
+      setVencimentoData('');
     }
   };
 
@@ -353,6 +632,70 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
         </div>
       </section>
 
+      {/* Reservas (desgaste por km e reserva mensal) */}
+      <section
+        aria-labelledby="titulo-reservas"
+        className="rota-card p-3.5 space-y-3"
+      >
+        <h3
+          id="titulo-reservas"
+          className="text-[15px] font-extrabold text-[var(--rota-text)]"
+        >
+          Reservas
+        </h3>
+
+        <div className="flex items-center justify-between gap-3">
+          <label
+            htmlFor="input-reserva-km"
+            className="min-w-0 text-[14px] font-bold text-[var(--rota-text)] leading-snug"
+          >
+            Reserva de desgaste da moto (R$ por km)
+          </label>
+          <div className="rota-input flex h-[48px] w-[132px] shrink-0 items-center px-3">
+            <span className="mr-1.5 text-[14px] font-bold text-[var(--rota-text-soft)]">
+              R$
+            </span>
+            <input
+              id="input-reserva-km"
+              type="text"
+              inputMode="decimal"
+              value={reservaKmTexto}
+              onChange={(e) => handleReservaKmChange(e.target.value)}
+              placeholder="0,00"
+              className="w-full bg-transparent text-right text-[16px] font-extrabold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <label
+              htmlFor="input-reserva-mes"
+              className="block text-[14px] font-bold text-[var(--rota-text)] leading-snug"
+            >
+              Reserva mensal (R$)
+            </label>
+            <span className="block text-[13px] font-semibold text-[var(--rota-text-soft)]">
+              IPVA, seguro, MEI etc.
+            </span>
+          </div>
+          <div className="rota-input flex h-[48px] w-[132px] shrink-0 items-center px-3">
+            <span className="mr-1.5 text-[14px] font-bold text-[var(--rota-text-soft)]">
+              R$
+            </span>
+            <input
+              id="input-reserva-mes"
+              type="text"
+              inputMode="decimal"
+              value={reservaMesTexto}
+              onChange={(e) => handleReservaMesChange(e.target.value)}
+              placeholder="0,00"
+              className="w-full bg-transparent text-right text-[16px] font-extrabold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
+            />
+          </div>
+        </div>
+      </section>
+
       {/* Troca de óleo */}
       <section aria-labelledby="titulo-troca-oleo" className="rota-card p-3.5">
         <div className="mb-2 flex items-center justify-between gap-2">
@@ -431,17 +774,184 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
         </div>
       </section>
 
-      {/* Backup JSON e CSV */}
-      <section aria-labelledby="titulo-planilha-backup" className="rota-card p-3.5">
-        <div className="mb-2.5 flex items-center justify-between gap-2">
+      {/* Vencimentos */}
+      <section
+        aria-labelledby="titulo-vencimentos"
+        className="rota-card p-3.5 space-y-3"
+      >
+        <h3
+          id="titulo-vencimentos"
+          className="text-[15px] font-extrabold text-[var(--rota-text)]"
+        >
+          Vencimentos
+        </h3>
+
+        <div className="grid grid-cols-2 gap-2">
+          {SUGESTOES_VENCIMENTO.map((sugestao) => (
+            <button
+              key={sugestao}
+              type="button"
+              onClick={() => handleSelecionarSugestaoVencimento(sugestao)}
+              className="flex h-[48px] items-center justify-center rounded-[12px] bg-[var(--rota-surface-2)] px-3 text-[13px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
+            >
+              + {sugestao}
+            </button>
+          ))}
+        </div>
+
+        <form onSubmit={handleSalvarVencimento} className="space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label
+                htmlFor="input-vencimento-nome"
+                className="mb-1 block text-[13px] font-bold text-[var(--rota-text-soft)]"
+              >
+                Documento
+              </label>
+              <div className="rota-input flex h-[48px] items-center px-3">
+                <input
+                  id="input-vencimento-nome"
+                  type="text"
+                  maxLength={40}
+                  value={vencimentoNome}
+                  onChange={(e) => {
+                    setVencimentoNome(e.target.value);
+                    if (erroVencimento) setErroVencimento(null);
+                  }}
+                  placeholder="Ex: IPVA, CNH"
+                  className="w-full bg-transparent text-[15px] font-bold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="input-vencimento-data"
+                className="mb-1 block text-[13px] font-bold text-[var(--rota-text-soft)]"
+              >
+                Vence em
+              </label>
+              <div className="rota-input flex h-[48px] items-center px-3">
+                <input
+                  ref={inputVencimentoDataRef}
+                  id="input-vencimento-data"
+                  type="date"
+                  value={vencimentoData}
+                  onChange={(e) => {
+                    setVencimentoData(e.target.value);
+                    if (erroVencimento) setErroVencimento(null);
+                  }}
+                  className="w-full bg-transparent text-[15px] font-bold text-[var(--rota-text)] focus:outline-none tabular-nums"
+                />
+              </div>
+            </div>
+          </div>
+
+          {erroVencimento && (
+            <p
+              role="alert"
+              className="text-[13px] font-bold text-[var(--rota-danger)]"
+            >
+              {erroVencimento}
+            </p>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              className="flex h-[48px] flex-1 items-center justify-center rounded-[14px] bg-[var(--rota-accent)] px-4 text-[14px] font-extrabold text-[var(--rota-on-accent)] active:scale-[0.98]"
+            >
+              {editandoVencimentoId ? 'Salvar edição' : 'Adicionar vencimento'}
+            </button>
+            {editandoVencimentoId && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditandoVencimentoId(null);
+                  setVencimentoNome('');
+                  setVencimentoData('');
+                  setErroVencimento(null);
+                }}
+                className="flex h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-surface-2)] px-4 text-[14px] font-bold text-[var(--rota-text-soft)] active:scale-[0.98]"
+              >
+                Cancelar
+              </button>
+            )}
+          </div>
+        </form>
+
+        {vencimentosOrdenados.length > 0 && (
+          <ul className="divide-y divide-[var(--rota-line)] border-t border-[var(--rota-line)] pt-1">
+            {vencimentosOrdenados.map((item) => {
+              const dias = calcularDiasParaVencimento(item.dataVencimento);
+              const vencido = dias !== null && dias < 0;
+              return (
+                <li
+                  key={item.id}
+                  className="flex min-h-[52px] items-center justify-between gap-2 py-1.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[14px] font-extrabold text-[var(--rota-text)]">
+                      {item.nome}
+                    </p>
+                    <p
+                      className={`text-[13px] font-semibold tabular-nums ${
+                        vencido
+                          ? 'text-[var(--rota-danger)]'
+                          : 'text-[var(--rota-text-soft)]'
+                      }`}
+                    >
+                      {formatarDataVencimento(item.dataVencimento)}
+                      {dias !== null &&
+                        (vencido
+                          ? ' · Vencido'
+                          : dias === 0
+                            ? ' · Vence hoje'
+                            : dias <= 30
+                              ? ` · em ${dias} ${dias === 1 ? 'dia' : 'dias'}`
+                              : '')}
+                    </p>
+                  </div>
+                  <div className="-mr-2 flex shrink-0 items-center">
+                    <button
+                      type="button"
+                      onClick={() => handleEditarVencimento(item)}
+                      aria-label={`Editar ${item.nome}`}
+                      className="flex h-[48px] w-[48px] items-center justify-center rounded-[12px] text-[var(--rota-text-soft)] hover:bg-[var(--rota-surface-2)] hover:text-[var(--rota-text)]"
+                    >
+                      <Pencil className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleExcluirVencimento(item.id)}
+                      aria-label={`Excluir ${item.nome}`}
+                      className="flex h-[48px] w-[48px] items-center justify-center rounded-[12px] text-[var(--rota-text-soft)] hover:bg-[var(--rota-danger-tint)] hover:text-[var(--rota-danger)]"
+                    >
+                      <Trash2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      {/* Dados: Backup, Compartilhar e Relatório do mês */}
+      <section
+        aria-labelledby="titulo-planilha-backup"
+        className="rota-card p-3.5 space-y-2.5"
+      >
+        <div className="flex items-center justify-between gap-2">
           <h3
             id="titulo-planilha-backup"
             className="text-[15px] font-extrabold text-[var(--rota-text)]"
           >
-            Backup e planilha
+            Dados e compartilhamento
           </h3>
           {mensagemBackup && (
             <span
+              role="status"
               className={`text-[13px] font-bold ${
                 mensagemBackup.erro
                   ? 'text-[var(--rota-danger)]'
@@ -477,6 +987,34 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
           </button>
         </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={handleCompartilharBackup}
+            className="flex h-[48px] items-center justify-center gap-2 rounded-[14px] bg-[var(--rota-surface-2)] px-3 text-[14px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
+          >
+            <Share2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Compartilhar backup
+          </button>
+          <button
+            type="button"
+            onClick={handleCompartilharResumoDia}
+            className="flex h-[48px] items-center justify-center gap-2 rounded-[14px] bg-[var(--rota-surface-2)] px-3 text-[14px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
+          >
+            <Share2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Compartilhar resumo do dia
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setRelatorioMesAberto(true)}
+          className="flex h-[48px] w-full items-center justify-center gap-2 rounded-[14px] bg-[var(--rota-accent-tint)] px-3 text-[14px] font-extrabold text-[var(--rota-accent)] active:scale-[0.98]"
+        >
+          <Printer className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Relatório do mês
+        </button>
+
         <input
           ref={inputRestoreRef}
           type="file"
@@ -488,6 +1026,15 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
       </section>
 
       <PWAInstallButton />
+
+      <RelatorioMensalModal
+        aberto={relatorioMesAberto}
+        onFechar={() => setRelatorioMesAberto(false)}
+        todosLancamentos={todosLancamentos}
+        todosTrajetos={todosTrajetos}
+        reservaKm={reservaKm}
+        reservaMes={reservaMes}
+      />
     </div>
   );
 };

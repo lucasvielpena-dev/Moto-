@@ -14,6 +14,7 @@ import {
   StatusOdometro,
   TipoLancamento,
   Trajeto,
+  Vencimento,
 } from './types';
 import {
   filtrarPorPeriodo,
@@ -29,17 +30,25 @@ import {
   carregarMetaDiaria,
   carregarMinLucroKm,
   carregarPercentualReserva,
+  carregarReservaKm,
+  carregarReservaMes,
   carregarTema,
   carregarTrajetos,
+  carregarVencimentos,
   gerarId,
+  obterEntregasLancamento,
   salvarConfigOleo,
   salvarLancamentos,
   salvarMetaDiaria,
   salvarMinLucroKm,
   salvarPercentualReserva,
+  salvarReservaKm,
+  salvarReservaMes,
   salvarTema,
   salvarTrajetos,
+  salvarVencimentos,
 } from './utils/storage';
+import { obterAvisoVencimentoMaisProximo } from './utils/vencimentos';
 
 type AbaPrincipal = 'hoje' | 'resumo' | 'historico' | 'ajustes';
 
@@ -93,6 +102,13 @@ export default function App() {
   );
   const [percentualReserva, setPercentualReserva] = useState<number>(() =>
     carregarPercentualReserva()
+  );
+  const [reservaKm, setReservaKm] = useState<number>(() => carregarReservaKm());
+  const [reservaMes, setReservaMes] = useState<number>(() =>
+    carregarReservaMes()
+  );
+  const [vencimentos, setVencimentos] = useState<Vencimento[]>(() =>
+    carregarVencimentos()
   );
   const [configOleo, setConfigOleo] = useState<ConfigTrocaOleo>(() =>
     carregarConfigOleo()
@@ -166,6 +182,26 @@ export default function App() {
   useEffect(() => {
     salvarTrajetos(trajetos);
   }, [trajetos]);
+
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const novo = url.searchParams.get('novo');
+      if (novo === 'ganho' || novo === 'gasto') {
+        setAbaAtiva('hoje');
+        setSheetLancamento({
+          aberto: true,
+          tipo:
+            novo === 'gasto' ? TipoLancamento.GASTO : TipoLancamento.GANHO,
+        });
+        url.searchParams.delete('novo');
+        const destino = `${url.pathname}${url.search}${url.hash}`;
+        window.history.replaceState({}, '', destino || '/');
+      }
+    } catch {
+      // Ignore malformed URLs safely
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -245,6 +281,21 @@ export default function App() {
     salvarConfigOleo(novaConfig);
   };
 
+  const handleMudarReservaKm = (valor: number) => {
+    setReservaKm(valor);
+    salvarReservaKm(valor);
+  };
+
+  const handleMudarReservaMes = (valor: number) => {
+    setReservaMes(valor);
+    salvarReservaMes(valor);
+  };
+
+  const handleMudarVencimentos = (novos: Vencimento[]) => {
+    setVencimentos(novos);
+    salvarVencimentos(novos);
+  };
+
   const handleOdometroStatusChange = useCallback(
     (info: {
       status: StatusOdometro;
@@ -265,6 +316,7 @@ export default function App() {
     observacao?: string;
     kmEntrega?: number;
     duracaoEntregaSegundos?: number;
+    entregas?: number;
   }) => {
     const novo: Lancamento = {
       id: gerarId(),
@@ -275,6 +327,13 @@ export default function App() {
       observacao: dados.observacao,
       kmEntrega: dados.kmEntrega,
       duracaoEntregaSegundos: dados.duracaoEntregaSegundos,
+      entregas:
+        dados.tipo === TipoLancamento.GANHO &&
+        typeof dados.entregas === 'number' &&
+        Number.isFinite(dados.entregas) &&
+        Math.floor(dados.entregas) >= 1
+          ? Math.floor(dados.entregas)
+          : undefined,
     };
     setLancamentos((anteriores) => [novo, ...anteriores]);
     agendarDesfazer({
@@ -353,7 +412,10 @@ export default function App() {
     novaMetaDiaria: number,
     novaConfigOleo?: ConfigTrocaOleo,
     novoPercentualReserva?: number,
-    novoMinLucroKm?: number
+    novoMinLucroKm?: number,
+    novaReservaKm?: number,
+    novaReservaMes?: number,
+    novosVencimentos?: Vencimento[]
   ) => {
     setLancamentos(novosLancamentos);
     setTrajetos(novosTrajetos);
@@ -367,6 +429,15 @@ export default function App() {
     }
     if (typeof novoMinLucroKm === 'number') {
       handleMudarMinLucroKm(novoMinLucroKm);
+    }
+    if (typeof novaReservaKm === 'number') {
+      handleMudarReservaKm(novaReservaKm);
+    }
+    if (typeof novaReservaMes === 'number') {
+      handleMudarReservaMes(novaReservaMes);
+    }
+    if (Array.isArray(novosVencimentos)) {
+      handleMudarVencimentos(novosVencimentos);
     }
     setDesfazer(null);
   };
@@ -383,6 +454,8 @@ export default function App() {
 
   const kmEmAndamento =
     odometroInfo.status !== 'idle' ? odometroInfo.km : 0;
+  const tempoEmAndamentoSegundos =
+    odometroInfo.status !== 'idle' ? odometroInfo.tempoSegundos : 0;
 
   const lancamentosHoje = useMemo(
     () =>
@@ -394,15 +467,30 @@ export default function App() {
 
   const resumoHoje = useMemo(() => {
     const trajHoje = filtrarPorPeriodo(trajetos, FiltroPeriodo.HOJE);
-    const ganhos = lancamentosHoje
-      .filter((l) => l.tipo === TipoLancamento.GANHO)
-      .reduce((acc, l) => acc + l.valor, 0);
+    const ganhosLista = lancamentosHoje.filter(
+      (l) => l.tipo === TipoLancamento.GANHO
+    );
+    const ganhos = ganhosLista.reduce((acc, l) => acc + l.valor, 0);
+    const entregas = ganhosLista.reduce(
+      (acc, l) => acc + obterEntregasLancamento(l),
+      0
+    );
     const gastos = lancamentosHoje
       .filter((l) => l.tipo === TipoLancamento.GASTO)
       .reduce((acc, l) => acc + l.valor, 0);
     const km = trajHoje.reduce((acc, t) => acc + t.km, 0) + kmEmAndamento;
-    return { ganhos, gastos, lucro: ganhos - gastos, km };
-  }, [lancamentosHoje, trajetos, kmEmAndamento]);
+    const tempoTotalSegundos =
+      trajHoje.reduce((acc, t) => acc + (t.duracaoSegundos ?? 0), 0) +
+      tempoEmAndamentoSegundos;
+    return {
+      ganhos,
+      gastos,
+      lucro: ganhos - gastos,
+      km,
+      entregas,
+      tempoTotalSegundos,
+    };
+  }, [lancamentosHoje, trajetos, kmEmAndamento, tempoEmAndamentoSegundos]);
 
   const ultimosDoisLancamentos = useMemo(
     () => lancamentosHoje.slice(0, 2),
@@ -421,31 +509,44 @@ export default function App() {
     resumoHoje.km > 0 ? resumoHoje.gastos / resumoHoje.km : 0;
   const lucroPorKmHoje =
     resumoHoje.km > 0 ? resumoHoje.lucro / resumoHoje.km : 0;
+  const lucroRealPorKmHoje = lucroPorKmHoje - reservaKm;
   const compensouHoje =
     resumoHoje.km > 0 && lucroPorKmHoje > 0 && lucroPorKmHoje >= minLucroKm;
+
+  const valorPorEntregaHoje =
+    resumoHoje.entregas > 0 ? resumoHoje.ganhos / resumoHoje.entregas : 0;
+  const entregasPorHoraHoje =
+    resumoHoje.tempoTotalSegundos > 0
+      ? resumoHoje.entregas / (resumoHoje.tempoTotalSegundos / 3600)
+      : null;
+
+  const avisoVencimento = useMemo(
+    () => obterAvisoVencimentoMaisProximo(vencimentos),
+    [vencimentos]
+  );
 
   const dataHojeFormatada = useMemo(() => formatarDataPorExtenso(new Date()), []);
 
   const paddingBottomClass =
     abaAtiva === 'hoje'
-      ? 'pb-[calc(136px+env(safe-area-inset-bottom))]'
+      ? 'pb-[calc(128px+env(safe-area-inset-bottom))]'
       : 'pb-[calc(84px+env(safe-area-inset-bottom))]';
 
   return (
     <div
-      className={`min-h-[100dvh] w-full overflow-x-hidden bg-[var(--rota-bg)] px-4 pt-3 ${paddingBottomClass}`}
+      className={`rota-no-print min-h-[100dvh] w-full overflow-x-hidden bg-[var(--rota-bg)] px-4 pt-2.5 ${paddingBottomClass}`}
     >
       <main className="mx-auto w-full max-w-[460px]">
         {/* Aba 1: Hoje */}
         <div
           role="tabpanel"
           aria-hidden={abaAtiva !== 'hoje'}
-          className={abaAtiva === 'hoje' ? 'space-y-3' : 'hidden'}
+          className={abaAtiva === 'hoje' ? 'space-y-2.5' : 'hidden'}
         >
           {/* 1. Cabeçalho */}
-          <header className="flex items-center justify-between gap-3">
+          <header className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <h1 className="text-[26px] leading-[30px] font-extrabold text-[var(--rota-text)]">
+              <h1 className="text-[24px] leading-[28px] font-extrabold text-[var(--rota-text)]">
                 Hoje
               </h1>
               <p className="truncate text-[13px] font-semibold text-[var(--rota-text-soft)]">
@@ -453,23 +554,45 @@ export default function App() {
               </p>
             </div>
 
-            {odometroInfo.status === 'running' && (
-              <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--rota-success-tint)] px-3 py-1 text-[13px] font-extrabold text-[var(--rota-success)]">
-                <span
-                  className="h-2 w-2 rounded-full bg-[var(--rota-success)]"
-                  aria-hidden="true"
-                />
-                GPS ativo
-              </span>
-            )}
+            <div className="flex shrink-0 items-center gap-1.5">
+              {avisoVencimento && (
+                <button
+                  type="button"
+                  onClick={handleIrParaAjustes}
+                  className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[13px] font-extrabold ${
+                    avisoVencimento.vencido
+                      ? 'bg-[var(--rota-danger-tint)] text-[var(--rota-danger)]'
+                      : 'bg-[var(--rota-surface-2)] text-[var(--rota-text)]'
+                  }`}
+                >
+                  {avisoVencimento.texto}
+                </button>
+              )}
+
+              {odometroInfo.status === 'running' && (
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--rota-success-tint)] px-2.5 py-1 text-[13px] font-extrabold text-[var(--rota-success)]">
+                  <span
+                    className="h-2 w-2 rounded-full bg-[var(--rota-success)]"
+                    aria-hidden="true"
+                  />
+                  GPS ativo
+                </span>
+              )}
+            </div>
           </header>
 
           {/* 2. Cartão de ganhos */}
-          <section aria-label="Ganhos de hoje" className="rota-card px-4 py-3">
-            <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
-              Ganhos de hoje
-            </span>
-            <span className="mt-0.5 block text-[44px] leading-[48px] font-extrabold text-[var(--rota-text)] tabular-nums">
+          <section aria-label="Ganhos de hoje" className="rota-card px-4 py-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
+                Ganhos de hoje
+              </span>
+              <span className="text-[13px] font-bold text-[var(--rota-text-soft)] tabular-nums">
+                {resumoHoje.entregas}{' '}
+                {resumoHoje.entregas === 1 ? 'entrega' : 'entregas'}
+              </span>
+            </div>
+            <span className="mt-0.5 block text-[38px] leading-[42px] font-extrabold text-[var(--rota-text)] tabular-nums">
               {formatarMoeda(resumoHoje.ganhos)}
             </span>
 
@@ -489,7 +612,7 @@ export default function App() {
               />
             </div>
 
-            <div className="mt-2 flex items-center justify-between gap-2 text-[13px] font-semibold tabular-nums">
+            <div className="mt-1.5 flex items-center justify-between gap-2 text-[13px] font-semibold tabular-nums">
               {metaDiaria > 0 ? (
                 <>
                   <span className="text-[var(--rota-text-soft)]">
@@ -512,12 +635,22 @@ export default function App() {
                 </button>
               )}
             </div>
+
+            <div className="mt-1 text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
+              {resumoHoje.entregas > 0
+                ? `${formatarMoeda(valorPorEntregaHoje)} por entrega`
+                : '— por entrega'}{' '}
+              ·{' '}
+              {entregasPorHoraHoje !== null
+                ? `${entregasPorHoraHoje.toFixed(1).replace('.', ',')} entregas/h`
+                : '—'}
+            </div>
           </section>
 
           {/* 3. Cartão com 3 colunas: Gastos, Lucro, Distância */}
           <section
             aria-label="Resumo rápido de hoje"
-            className="rota-card grid grid-cols-3 gap-2 px-4 py-3"
+            className="rota-card grid grid-cols-3 gap-2 px-4 py-2.5"
           >
             <div className="min-w-0">
               <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
@@ -556,7 +689,7 @@ export default function App() {
           </section>
 
           {/* 4. Cartão Lucro por km */}
-          <section aria-label="Lucro por km de hoje" className="rota-card px-4 py-3">
+          <section aria-label="Lucro por km de hoje" className="rota-card px-4 py-2.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[13px] font-bold text-[var(--rota-text-soft)]">
                 Lucro por km
@@ -574,7 +707,7 @@ export default function App() {
               )}
             </div>
 
-            <span className="mt-0.5 block text-[30px] leading-[34px] font-extrabold text-[var(--rota-text)] tabular-nums">
+            <span className="mt-0.5 block text-[28px] leading-[32px] font-extrabold text-[var(--rota-text)] tabular-nums">
               {resumoHoje.km > 0 ? formatarMoeda(lucroPorKmHoje) : '—'}
             </span>
 
@@ -582,6 +715,27 @@ export default function App() {
               {formatarMoeda(ganhoPorKmHoje)} − {formatarMoeda(custoPorKmHoje)}{' '}
               por km
             </span>
+
+            {reservaKm > 0 && (
+              <span className="mt-0.5 block text-[13px] font-bold text-[var(--rota-text)] tabular-nums">
+                Lucro real por km:{' '}
+                <span
+                  className={
+                    resumoHoje.km <= 0
+                      ? 'text-[var(--rota-text)]'
+                      : lucroRealPorKmHoje > 0
+                        ? 'text-[var(--rota-success)]'
+                        : lucroRealPorKmHoje < 0
+                          ? 'text-[var(--rota-danger)]'
+                          : 'text-[var(--rota-text)]'
+                  }
+                >
+                  {resumoHoje.km > 0
+                    ? formatarMoeda(lucroRealPorKmHoje)
+                    : '—'}
+                </span>
+              </span>
+            )}
           </section>
 
           {/* 5. Faixa do odômetro (sempre montada para manter GPS contínuo ao trocar de aba) */}
@@ -646,6 +800,9 @@ export default function App() {
               todosLancamentos={lancamentos}
               trajetos={trajetosDoPeriodo}
               kmEmAndamento={kmEmAndamento}
+              tempoEmAndamentoSegundos={tempoEmAndamentoSegundos}
+              reservaKm={reservaKm}
+              reservaMes={reservaMes}
             />
           </div>
         )}
@@ -689,9 +846,23 @@ export default function App() {
               onMudarMetaDiaria={handleMudarMetaDiaria}
               minLucroKm={minLucroKm}
               onMudarMinLucroKm={handleMudarMinLucroKm}
+              reservaKm={reservaKm}
+              onMudarReservaKm={handleMudarReservaKm}
+              reservaMes={reservaMes}
+              onMudarReservaMes={handleMudarReservaMes}
+              vencimentos={vencimentos}
+              onMudarVencimentos={handleMudarVencimentos}
               percentualReserva={percentualReserva}
               configOleoExterna={configOleo}
               onMudarConfigOleo={handleMudarConfigOleo}
+              resumoHoje={{
+                ganhos: resumoHoje.ganhos,
+                gastos: resumoHoje.gastos,
+                lucro: resumoHoje.lucro,
+                km: resumoHoje.km,
+                entregas: resumoHoje.entregas,
+                lucroPorKm: lucroPorKmHoje,
+              }}
               onRestaurarBackup={handleRestaurarBackup}
             />
           </div>

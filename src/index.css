@@ -197,3 +197,42 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+@media print {
+  :root,
+  :root[data-theme="dark"],
+  html,
+  body {
+    background: #FFFFFF !important;
+    background-color: #FFFFFF !important;
+    color: #0F172A !important;
+    color-scheme: light !important;
+  }
+
+  .rota-no-print {
+    display: none !important;
+  }
+
+  .rota-print-overlay {
+    position: static !important;
+    inset: auto !important;
+    overflow: visible !important;
+    background: #FFFFFF !important;
+    background-color: #FFFFFF !important;
+    color: #0F172A !important;
+  }
+
+  .rota-print-sheet {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+
+  .rota-print-card {
+    border: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background: #FFFFFF !important;
+    color: #0F172A !important;
+  }
+}
+

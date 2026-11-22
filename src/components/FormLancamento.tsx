@@ -19,6 +19,7 @@ interface FormLancamentoProps {
     categoria: Plataforma | CategoriaGasto;
     valor: number;
     observacao?: string;
+    entregas?: number;
   }) => void;
 }
 
@@ -67,6 +68,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
     () => categoriasGastoOrdenadas[0] ?? CategoriaGasto.COMBUSTIVEL
   );
   const [valorTexto, setValorTexto] = useState<string>('');
+  const [entregasTexto, setEntregasTexto] = useState<string>('1');
   const [mostrarObs, setMostrarObs] = useState<boolean>(false);
   const [observacao, setObservacao] = useState<string>('');
   const [erro, setErro] = useState<string | null>(null);
@@ -79,6 +81,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
         categoriasGastoOrdenadas[0] ?? CategoriaGasto.COMBUSTIVEL
       );
       setValorTexto('');
+      setEntregasTexto('1');
       setObservacao('');
       setMostrarObs(false);
       setErro(null);
@@ -90,6 +93,16 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
   }
 
   const ehGanho = tipo === TipoLancamento.GANHO;
+
+  const entregasNum = (() => {
+    const parsed = parseInt(entregasTexto.replace(/\D/g, ''), 10);
+    return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
+  })();
+
+  const ajustarEntregas = (delta: number) => {
+    const proximo = Math.max(1, entregasNum + delta);
+    setEntregasTexto(String(proximo));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,6 +122,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
       categoria,
       valor: Number(valor.toFixed(2)),
       observacao: obsLimpa || undefined,
+      entregas: ehGanho ? entregasNum : undefined,
     });
     onFechar();
   };
@@ -143,7 +157,7 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
           className="flex flex-1 flex-col justify-between gap-3 overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
         >
           <div className="space-y-3">
-            {/* Seletor segmentado Ganho | Gasto (44px) */}
+            {/* Seletor segmentado Ganho | Gasto */}
             <div
               role="tablist"
               aria-label="Tipo de lançamento"
@@ -218,6 +232,49 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
                 </p>
               )}
             </div>
+
+            {/* Campo opcional Entregas (somente para GANHO) */}
+            {ehGanho && (
+              <div className="rota-card px-4 py-2.5 flex items-center justify-between gap-3">
+                <label
+                  htmlFor="input-entregas-lancamento"
+                  className="text-[14px] font-extrabold text-[var(--rota-text)]"
+                >
+                  Entregas
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label="Diminuir entregas"
+                    onClick={() => ajustarEntregas(-1)}
+                    className="flex h-[48px] w-[48px] items-center justify-center rounded-[12px] bg-[var(--rota-surface-2)] text-[18px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
+                  >
+                    −
+                  </button>
+                  <div className="rota-input flex h-[48px] w-[64px] items-center justify-center px-2">
+                    <input
+                      id="input-entregas-lancamento"
+                      type="text"
+                      inputMode="numeric"
+                      value={entregasTexto}
+                      onChange={(e) =>
+                        setEntregasTexto(e.target.value.replace(/\D/g, ''))
+                      }
+                      onBlur={() => setEntregasTexto(String(entregasNum))}
+                      className="w-full bg-transparent text-center text-[16px] font-extrabold text-[var(--rota-text)] focus:outline-none tabular-nums"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Aumentar entregas"
+                    onClick={() => ajustarEntregas(1)}
+                    className="flex h-[48px] w-[48px] items-center justify-center rounded-[12px] bg-[var(--rota-surface-2)] text-[18px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Grade 2x2 de 56px: Plataforma ou Categoria */}
             <div>

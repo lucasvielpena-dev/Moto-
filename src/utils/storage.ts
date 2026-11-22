@@ -4,6 +4,7 @@ import {
   Plataforma,
   TipoLancamento,
   Trajeto,
+  Vencimento,
 } from '../types';
 
 const KEY_LANCAMENTOS = 'rota_lancamentos_v1';
@@ -19,6 +20,9 @@ const KEY_TEMA = 'rota_tema_v1';
 const KEY_MIN_LUCRO_KM = 'rota_min_lucro_km_v1';
 const KEY_MODO_MOVIMENTO = 'rota_modo_movimento_v1';
 const KEY_CONTRASTE = 'rota_contraste_v1';
+const KEY_RESERVA_KM = 'rota_reserva_km_v1';
+const KEY_RESERVA_MES = 'rota_reserva_mes_v1';
+const KEY_VENCIMENTOS = 'rota_vencimentos_v1';
 
 export type PreferenciaTema = 'auto' | 'claro' | 'escuro';
 
@@ -40,6 +44,20 @@ const CATEGORIAS_VALIDAS = new Set<string>([
   ...Object.values(Plataforma),
   ...Object.values(CategoriaGasto),
 ]);
+
+const REGEX_DATA_ISO_DIA = /^\d{4}-\d{2}-\d{2}$/;
+
+export function obterEntregasLancamento(item: Lancamento): number {
+  if (item.tipo !== TipoLancamento.GANHO) return 0;
+  if (
+    typeof item.entregas === 'number' &&
+    Number.isFinite(item.entregas) &&
+    Math.floor(item.entregas) >= 1
+  ) {
+    return Math.floor(item.entregas);
+  }
+  return 1;
+}
 
 function sanitizarLancamentos(itens: unknown[]): Lancamento[] {
   return itens
@@ -79,6 +97,13 @@ function sanitizarLancamentos(itens: unknown[]): Lancamento[] {
         item.duracaoEntregaSegundos > 0
           ? Math.floor(item.duracaoEntregaSegundos)
           : undefined,
+      entregas:
+        item.tipo === TipoLancamento.GANHO &&
+        typeof item.entregas === 'number' &&
+        Number.isFinite(item.entregas) &&
+        Math.floor(item.entregas) >= 1
+          ? Math.floor(item.entregas)
+          : undefined,
     }));
 }
 
@@ -107,6 +132,25 @@ function sanitizarTrajetos(itens: unknown[]): Trajeto[] {
         item.duracaoSegundos > 0
           ? Math.floor(item.duracaoSegundos)
           : undefined,
+    }));
+}
+
+function sanitizarVencimentos(itens: unknown[]): Vencimento[] {
+  return itens
+    .filter(
+      (item): item is Vencimento =>
+        Boolean(item) &&
+        typeof item === 'object' &&
+        typeof (item as Vencimento).id === 'string' &&
+        typeof (item as Vencimento).nome === 'string' &&
+        (item as Vencimento).nome.trim().length > 0 &&
+        typeof (item as Vencimento).dataVencimento === 'string' &&
+        REGEX_DATA_ISO_DIA.test((item as Vencimento).dataVencimento)
+    )
+    .map((item) => ({
+      id: item.id,
+      nome: item.nome.trim().slice(0, 40),
+      dataVencimento: item.dataVencimento,
     }));
 }
 
@@ -274,6 +318,67 @@ export function salvarMinLucroKm(valor: number): void {
   }
 }
 
+export function carregarReservaKm(): number {
+  try {
+    const raw = localStorage.getItem(KEY_RESERVA_KM);
+    if (!raw) return 0;
+    const num = Number(raw);
+    return Number.isFinite(num) && num >= 0 ? num : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function salvarReservaKm(valor: number): void {
+  try {
+    if (Number.isFinite(valor) && valor >= 0) {
+      localStorage.setItem(KEY_RESERVA_KM, String(valor));
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function carregarReservaMes(): number {
+  try {
+    const raw = localStorage.getItem(KEY_RESERVA_MES);
+    if (!raw) return 0;
+    const num = Number(raw);
+    return Number.isFinite(num) && num >= 0 ? num : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function salvarReservaMes(valor: number): void {
+  try {
+    if (Number.isFinite(valor) && valor >= 0) {
+      localStorage.setItem(KEY_RESERVA_MES, String(valor));
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function carregarVencimentos(): Vencimento[] {
+  try {
+    const raw = localStorage.getItem(KEY_VENCIMENTOS);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? sanitizarVencimentos(parsed) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function salvarVencimentos(vencimentos: Vencimento[]): void {
+  try {
+    localStorage.setItem(KEY_VENCIMENTOS, JSON.stringify(vencimentos));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 export function carregarTema(): PreferenciaTema {
   try {
     const raw = localStorage.getItem(KEY_TEMA);
@@ -419,10 +524,13 @@ export interface BackupRota {
   exportadoEm: string;
   metaDiaria: number;
   minLucroKm?: number;
+  reservaKm?: number;
+  reservaMes?: number;
   modoMovimento?: boolean;
   altoContraste?: boolean;
   percentualReserva?: number;
   configOleo?: ConfigTrocaOleo;
+  vencimentos?: Vencimento[];
   lancamentos: Lancamento[];
   trajetos: Trajeto[];
 }
@@ -433,7 +541,7 @@ export function gerarConteudoCsv(
 ): string {
   const escapar = (v: string) => `"${v.replace(/"/g, '""')}"`;
   const linhas: string[] = [
-    'Registro;Data/Hora;Tipo;Categoria/Origem;Valor (R$);Distância (km);Observação',
+    'Registro;Data/Hora;Tipo;Categoria/Origem;Valor (R$);Distância (km);Entregas;Observação',
   ];
 
   for (const item of lancamentos) {
@@ -447,6 +555,9 @@ export function gerarConteudoCsv(
         item.valor.toFixed(2).replace('.', ','),
         typeof item.kmEntrega === 'number' && item.kmEntrega > 0
           ? item.kmEntrega.toFixed(2).replace('.', ',')
+          : '',
+        item.tipo === TipoLancamento.GANHO
+          ? String(obterEntregasLancamento(item))
           : '',
         escapar(item.observacao ?? ''),
       ].join(';')
@@ -463,6 +574,7 @@ export function gerarConteudoCsv(
         trajeto.origem === 'gps' ? 'GPS automático' : 'Manual',
         '',
         trajeto.km.toFixed(2).replace('.', ','),
+        '',
         trajeto.duracaoSegundos
           ? escapar(`Duração: ${Math.floor(trajeto.duracaoSegundos / 60)} min`)
           : '',
@@ -499,6 +611,20 @@ export function validarEConverterBackupJson(texto: string): BackupRota | null {
       Number.isFinite(parsed.minLucroKm) &&
       parsed.minLucroKm >= 0
         ? Number(parsed.minLucroKm.toFixed(2))
+        : undefined;
+
+    const reservaKm =
+      typeof parsed.reservaKm === 'number' &&
+      Number.isFinite(parsed.reservaKm) &&
+      parsed.reservaKm >= 0
+        ? Number(parsed.reservaKm.toFixed(2))
+        : undefined;
+
+    const reservaMes =
+      typeof parsed.reservaMes === 'number' &&
+      Number.isFinite(parsed.reservaMes) &&
+      parsed.reservaMes >= 0
+        ? Number(parsed.reservaMes.toFixed(2))
         : undefined;
 
     const modoMovimento =
@@ -542,6 +668,10 @@ export function validarEConverterBackupJson(texto: string): BackupRota | null {
         ? Number(parsed.percentualReserva.toFixed(1))
         : undefined;
 
+    const vencimentos = Array.isArray(parsed.vencimentos)
+      ? sanitizarVencimentos(parsed.vencimentos)
+      : undefined;
+
     return {
       versao: 1,
       exportadoEm:
@@ -550,10 +680,13 @@ export function validarEConverterBackupJson(texto: string): BackupRota | null {
           : new Date().toISOString(),
       metaDiaria,
       minLucroKm,
+      reservaKm,
+      reservaMes,
       modoMovimento,
       altoContraste,
       percentualReserva,
       configOleo,
+      vencimentos,
       lancamentos: lancamentosValidos,
       trajetos: trajetosValidos,
     };

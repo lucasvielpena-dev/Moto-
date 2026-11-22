@@ -18,6 +18,7 @@ import {
   parseValorNumerico,
   rotuloCategoria,
 } from '../utils/formatters';
+import { obterEntregasLancamento } from '../utils/storage';
 
 interface ListaLancamentosProps {
   periodo: FiltroPeriodo;
@@ -55,6 +56,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
     Plataforma.IFOOD
   );
   const [editValorTexto, setEditValorTexto] = useState<string>('');
+  const [editEntregasTexto, setEditEntregasTexto] = useState<string>('1');
   const [editObs, setEditObs] = useState<string>('');
   const [editErro, setEditErro] = useState<string | null>(null);
 
@@ -67,6 +69,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
     setEditTipo(item.tipo);
     setEditCategoria(item.categoria);
     setEditValorTexto(item.valor.toFixed(2).replace('.', ','));
+    setEditEntregasTexto(String(obterEntregasLancamento(item) || 1));
     setEditObs(item.observacao ?? '');
     setEditErro(null);
   };
@@ -81,6 +84,12 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
       return;
     }
 
+    const parsedEntregas = parseInt(editEntregasTexto.replace(/\D/g, ''), 10);
+    const entregasValidas =
+      Number.isFinite(parsedEntregas) && parsedEntregas >= 1
+        ? parsedEntregas
+        : 1;
+
     onEditarLancamento({
       ...itemEditando,
       tipo: editTipo,
@@ -93,6 +102,8 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
         editTipo === TipoLancamento.GANHO
           ? itemEditando.duracaoEntregaSegundos
           : undefined,
+      entregas:
+        editTipo === TipoLancamento.GANHO ? entregasValidas : undefined,
     });
     setItemEditando(null);
   };
@@ -204,6 +215,9 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                       </p>
                       <p className="truncate text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
                         {formatarDataHora(item.data)}
+                        {ehGanho && obterEntregasLancamento(item) > 1
+                          ? ` · ${obterEntregasLancamento(item)} entregas`
+                          : ''}
                         {typeof item.kmEntrega === 'number' &&
                         item.kmEntrega > 0
                           ? ` · ${formatarKm(item.kmEntrega)} km`
@@ -417,6 +431,29 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                   </p>
                 )}
               </div>
+
+              {editTipo === TipoLancamento.GANHO && (
+                <div>
+                  <label
+                    htmlFor="input-edit-entregas"
+                    className="mb-1.5 block text-[13px] font-bold text-[var(--rota-text-soft)]"
+                  >
+                    Entregas
+                  </label>
+                  <div className="rota-input flex h-[48px] items-center px-3.5">
+                    <input
+                      id="input-edit-entregas"
+                      type="text"
+                      inputMode="numeric"
+                      value={editEntregasTexto}
+                      onChange={(e) =>
+                        setEditEntregasTexto(e.target.value.replace(/\D/g, ''))
+                      }
+                      className="w-full bg-transparent text-[16px] font-extrabold text-[var(--rota-text)] focus:outline-none tabular-nums"
+                    />
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label

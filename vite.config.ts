@@ -111,6 +111,34 @@ export default defineConfig(() => {
               purpose: 'maskable',
             },
           ],
+          shortcuts: [
+            {
+              name: '+ Ganho',
+              short_name: '+ Ganho',
+              description: 'Registrar um novo ganho',
+              url: '/?novo=ganho',
+              icons: [
+                {
+                  src: '/pwa-192x192.png',
+                  sizes: '192x192',
+                  type: 'image/png',
+                },
+              ],
+            },
+            {
+              name: '+ Gasto',
+              short_name: '+ Gasto',
+              description: 'Registrar um novo gasto',
+              url: '/?novo=gasto',
+              icons: [
+                {
+                  src: '/pwa-192x192.png',
+                  sizes: '192x192',
+                  type: 'image/png',
+                },
+              ],
+            },
+          ],
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],

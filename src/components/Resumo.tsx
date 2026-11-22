@@ -8,6 +8,7 @@ import {
   Trajeto,
 } from '../types';
 import { formatarKm, formatarMoeda, rotuloCategoria } from '../utils/formatters';
+import { obterEntregasLancamento } from '../utils/storage';
 
 interface ResumoProps {
   periodo: FiltroPeriodo;
@@ -16,6 +17,9 @@ interface ResumoProps {
   todosLancamentos: Lancamento[];
   trajetos: Trajeto[];
   kmEmAndamento?: number;
+  tempoEmAndamentoSegundos?: number;
+  reservaKm?: number;
+  reservaMes?: number;
 }
 
 interface DadoDiaGrafico {
@@ -32,6 +36,15 @@ const OPCOES_PERIODO: { valor: FiltroPeriodo; rotulo: string }[] = [
 ];
 
 const DIAS_SEMANA_CURTOS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const DIAS_SEMANA_COMPLETOS = [
+  'Domingo',
+  'Segunda',
+  'Terça',
+  'Quarta',
+  'Quinta',
+  'Sexta',
+  'Sábado',
+];
 
 export const Resumo: React.FC<ResumoProps> = ({
   periodo,
@@ -40,6 +53,9 @@ export const Resumo: React.FC<ResumoProps> = ({
   todosLancamentos,
   trajetos,
   kmEmAndamento = 0,
+  tempoEmAndamentoSegundos = 0,
+  reservaKm = 0,
+  reservaMes = 0,
 }) => {
   const [visaoKm, setVisaoKm] = useState<'total' | 'entregas'>('total');
 
@@ -53,6 +69,9 @@ export const Resumo: React.FC<ResumoProps> = ({
 
   const totalKmSalvos = trajetos.reduce((acc, t) => acc + t.km, 0);
   const totalKm = totalKmSalvos + kmEmAndamento;
+  const tempoTotalSegundos =
+    trajetos.reduce((acc, t) => acc + (t.duracaoSegundos ?? 0), 0) +
+    tempoEmAndamentoSegundos;
 
   const entregasComKm = useMemo(
     () =>
@@ -78,19 +97,44 @@ export const Resumo: React.FC<ResumoProps> = ({
   const lucroExibido = receitaExibida - gastosExibidos;
   const kmExibido = modoEntregas ? kmEntregas : totalKm;
 
+  const entregasPeriodo = useMemo(() => {
+    const base = modoEntregas
+      ? entregasComKm
+      : lancamentos.filter((l) => l.tipo === TipoLancamento.GANHO);
+    return base.reduce((acc, l) => acc + obterEntregasLancamento(l), 0);
+  }, [lancamentos, entregasComKm, modoEntregas]);
+
+  const valorPorEntrega =
+    entregasPeriodo > 0 ? receitaExibida / entregasPeriodo : 0;
+  const entregasPorHora =
+    tempoTotalSegundos > 0
+      ? entregasPeriodo / (tempoTotalSegundos / 3600)
+      : null;
+
   const ganhoPorKm = kmExibido > 0 ? receitaExibida / kmExibido : 0;
   const custoPorKm = kmExibido > 0 ? gastosExibidos / kmExibido : 0;
   const lucroPorKm = kmExibido > 0 ? lucroExibido / kmExibido : 0;
+  const lucroRealPorKm = lucroPorKm - reservaKm;
+
+  const mostrarReservasMes =
+    periodo === FiltroPeriodo.MES && (reservaKm > 0 || reservaMes > 0);
+  const totalReservarMes = reservaKm * kmExibido + reservaMes;
+  const lucroLivreMes = lucroExibido - totalReservarMes;
 
   const ganhosPorPlataforma = PLATAFORMAS.map((plat: Plataforma) => {
-    const soma = lancamentos
-      .filter(
-        (l) => l.tipo === TipoLancamento.GANHO && l.categoria === plat
-      )
-      .reduce((acc, l) => acc + l.valor, 0);
+    const itens = lancamentos.filter(
+      (l) => l.tipo === TipoLancamento.GANHO && l.categoria === plat
+    );
+    const soma = itens.reduce((acc, l) => acc + l.valor, 0);
+    const entregasPlat = itens.reduce(
+      (acc, l) => acc + obterEntregasLancamento(l),
+      0
+    );
     return {
       plataforma: rotuloCategoria(plat),
       total: soma,
+      entregas: entregasPlat,
+      valorPorEntrega: entregasPlat > 0 ? soma / entregasPlat : 0,
       percentual: totalGanhos > 0 ? (soma / totalGanhos) * 100 : 0,
     };
   });
@@ -137,6 +181,105 @@ export const Resumo: React.FC<ResumoProps> = ({
     1,
     ...dadosUltimos7Dias.map((d) => Math.abs(d.lucro))
   );
+
+  // Melhores dias e horários (visível apenas se houver lançamentos em pelo menos 14 dias diferentes)
+  const analiseMelhoresDiasHorarios = useMemo(() => {
+    const diasComDados = new Map<string, number>(); // chaveDia -> diaSemana (0..6)
+    const somaGanhosPorDiaSemana = [0, 0, 0, 0, 0, 0, 0];
+    const somaGanhosPorFaixa = {
+      madrugada: 0,
+      manha: 0,
+      tarde: 0,
+      noite: 0,
+    };
+
+    for (const item of todosLancamentos) {
+      const d = new Date(item.data);
+      if (Number.isNaN(d.getTime())) continue;
+      const chaveDia = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (!diasComDados.has(chaveDia)) {
+        diasComDados.set(chaveDia, d.getDay());
+      }
+
+      if (item.tipo === TipoLancamento.GANHO) {
+        const diaSem = d.getDay();
+        somaGanhosPorDiaSemana[diaSem] += item.valor;
+        const hora = d.getHours();
+        if (hora >= 6 && hora < 12) {
+          somaGanhosPorFaixa.manha += item.valor;
+        } else if (hora >= 12 && hora < 18) {
+          somaGanhosPorFaixa.tarde += item.valor;
+        } else if (hora >= 18) {
+          somaGanhosPorFaixa.noite += item.valor;
+        } else {
+          somaGanhosPorFaixa.madrugada += item.valor;
+        }
+      }
+    }
+
+    const totalDiasUnicos = diasComDados.size;
+    if (totalDiasUnicos < 14) {
+      return null;
+    }
+
+    const qtdDiasPorSemana = [0, 0, 0, 0, 0, 0, 0];
+    for (const diaSem of diasComDados.values()) {
+      qtdDiasPorSemana[diaSem] += 1;
+    }
+
+    const mediasDiasSemana = DIAS_SEMANA_CURTOS.map((rotulo, idx) => {
+      const qtd = qtdDiasPorSemana[idx];
+      const media = qtd > 0 ? somaGanhosPorDiaSemana[idx] / qtd : 0;
+      return {
+        diaSemana: idx,
+        rotulo,
+        nomeCompleto: DIAS_SEMANA_COMPLETOS[idx],
+        media,
+      };
+    });
+
+    const melhorDia = mediasDiasSemana.reduce((melhor, atual) =>
+      atual.media > melhor.media ? atual : melhor
+    );
+    const maxMediaDiaSemana = Math.max(
+      1,
+      ...mediasDiasSemana.map((d) => d.media)
+    );
+
+    const faixas = [
+      {
+        id: 'manha',
+        rotulo: 'Manhã (6–12h)',
+        media: somaGanhosPorFaixa.manha / totalDiasUnicos,
+      },
+      {
+        id: 'tarde',
+        rotulo: 'Tarde (12–18h)',
+        media: somaGanhosPorFaixa.tarde / totalDiasUnicos,
+      },
+      {
+        id: 'noite',
+        rotulo: 'Noite (18–24h)',
+        media: somaGanhosPorFaixa.noite / totalDiasUnicos,
+      },
+      {
+        id: 'madrugada',
+        rotulo: 'Madrugada (0–6h)',
+        media: somaGanhosPorFaixa.madrugada / totalDiasUnicos,
+      },
+    ];
+
+    const melhorFaixa = faixas.reduce((melhor, atual) =>
+      atual.media > melhor.media ? atual : melhor
+    );
+
+    return {
+      melhorDia,
+      melhorFaixa,
+      mediasDiasSemana,
+      maxMediaDiaSemana,
+    };
+  }, [todosLancamentos]);
 
   return (
     <div className="space-y-3">
@@ -228,45 +371,130 @@ export const Resumo: React.FC<ResumoProps> = ({
         <span className="mt-1 block text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
           {formatarMoeda(ganhoPorKm)} − {formatarMoeda(custoPorKm)} por km
         </span>
+        {reservaKm > 0 && (
+          <span className="mt-1 block text-[13px] font-bold text-[var(--rota-text)] tabular-nums">
+            Lucro real por km:{' '}
+            <span
+              className={
+                kmExibido <= 0
+                  ? 'text-[var(--rota-text)]'
+                  : lucroRealPorKm > 0
+                    ? 'text-[var(--rota-success)]'
+                    : lucroRealPorKm < 0
+                      ? 'text-[var(--rota-danger)]'
+                      : 'text-[var(--rota-text)]'
+              }
+            >
+              {kmExibido > 0 ? formatarMoeda(lucroRealPorKm) : '—'}
+            </span>
+          </span>
+        )}
       </section>
 
-      {/* Cartão de 3 colunas: Ganhos, Gastos, Lucro */}
+      {/* Cartão de 3 colunas: Ganhos, Gastos, Lucro (+ Reservas no Mês) */}
       <section
         aria-label="Totais do período"
+        className="rota-card px-4 py-3.5 space-y-3"
+      >
+        <div className="grid grid-cols-3 gap-3">
+          <div className="min-w-0">
+            <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
+              Ganhos
+            </span>
+            <span className="mt-0.5 block truncate text-[20px] leading-[24px] font-extrabold text-[var(--rota-text)] tabular-nums">
+              {formatarMoeda(receitaExibida)}
+            </span>
+          </div>
+
+          <div className="min-w-0">
+            <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
+              Gastos
+            </span>
+            <span className="mt-0.5 block truncate text-[20px] leading-[24px] font-extrabold text-[var(--rota-danger)] tabular-nums">
+              {formatarMoeda(gastosExibidos)}
+            </span>
+          </div>
+
+          <div className="min-w-0">
+            <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
+              Lucro
+            </span>
+            <span
+              className={`mt-0.5 block truncate text-[20px] leading-[24px] font-extrabold tabular-nums ${
+                lucroExibido > 0
+                  ? 'text-[var(--rota-success)]'
+                  : lucroExibido < 0
+                    ? 'text-[var(--rota-danger)]'
+                    : 'text-[var(--rota-text)]'
+              }`}
+            >
+              {formatarMoeda(lucroExibido)}
+            </span>
+          </div>
+        </div>
+
+        {mostrarReservasMes && (
+          <div className="grid grid-cols-2 gap-3 border-t border-[var(--rota-line)] pt-3">
+            <div className="min-w-0">
+              <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
+                Reservar
+              </span>
+              <span className="mt-0.5 block truncate text-[18px] leading-[22px] font-extrabold text-[var(--rota-text)] tabular-nums">
+                {formatarMoeda(totalReservarMes)}
+              </span>
+            </div>
+
+            <div className="min-w-0">
+              <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
+                Lucro livre
+              </span>
+              <span
+                className={`mt-0.5 block truncate text-[18px] leading-[22px] font-extrabold tabular-nums ${
+                  lucroLivreMes > 0
+                    ? 'text-[var(--rota-success)]'
+                    : lucroLivreMes < 0
+                      ? 'text-[var(--rota-danger)]'
+                      : 'text-[var(--rota-text)]'
+                }`}
+              >
+                {formatarMoeda(lucroLivreMes)}
+              </span>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Cartão de Entregas no período */}
+      <section
+        aria-label="Entregas do período"
         className="rota-card grid grid-cols-3 gap-3 px-4 py-3.5"
       >
         <div className="min-w-0">
           <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
-            Ganhos
+            Entregas
           </span>
           <span className="mt-0.5 block truncate text-[20px] leading-[24px] font-extrabold text-[var(--rota-text)] tabular-nums">
-            {formatarMoeda(receitaExibida)}
+            {entregasPeriodo}
           </span>
         </div>
 
         <div className="min-w-0">
           <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
-            Gastos
+            Por entrega
           </span>
-          <span className="mt-0.5 block truncate text-[20px] leading-[24px] font-extrabold text-[var(--rota-danger)] tabular-nums">
-            {formatarMoeda(gastosExibidos)}
+          <span className="mt-0.5 block truncate text-[20px] leading-[24px] font-extrabold text-[var(--rota-text)] tabular-nums">
+            {entregasPeriodo > 0 ? formatarMoeda(valorPorEntrega) : '—'}
           </span>
         </div>
 
         <div className="min-w-0">
           <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
-            Lucro
+            Entregas/h
           </span>
-          <span
-            className={`mt-0.5 block truncate text-[20px] leading-[24px] font-extrabold tabular-nums ${
-              lucroExibido > 0
-                ? 'text-[var(--rota-success)]'
-                : lucroExibido < 0
-                  ? 'text-[var(--rota-danger)]'
-                  : 'text-[var(--rota-text)]'
-            }`}
-          >
-            {formatarMoeda(lucroExibido)}
+          <span className="mt-0.5 block truncate text-[20px] leading-[24px] font-extrabold text-[var(--rota-text)] tabular-nums">
+            {entregasPorHora !== null
+              ? entregasPorHora.toFixed(1).replace('.', ',')
+              : '—'}
           </span>
         </div>
       </section>
@@ -328,6 +556,95 @@ export const Resumo: React.FC<ResumoProps> = ({
         </div>
       </section>
 
+      {/* Cartão Melhores dias e horários (visível apenas >= 14 dias diferentes) */}
+      {analiseMelhoresDiasHorarios && (
+        <section
+          aria-label="Melhores dias e horários"
+          className="rota-card px-4 py-3.5 space-y-3"
+        >
+          <h2 className="text-[15px] font-extrabold text-[var(--rota-text)]">
+            Melhores dias e horários
+          </h2>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="min-w-0">
+              <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
+                Melhor dia da semana
+              </span>
+              <span className="mt-0.5 block truncate text-[17px] leading-[22px] font-extrabold text-[var(--rota-text)]">
+                {analiseMelhoresDiasHorarios.melhorDia.nomeCompleto}
+              </span>
+              <span className="block text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
+                {formatarMoeda(analiseMelhoresDiasHorarios.melhorDia.media)}/dia
+              </span>
+            </div>
+
+            <div className="min-w-0">
+              <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
+                Melhor faixa
+              </span>
+              <span className="mt-0.5 block truncate text-[17px] leading-[22px] font-extrabold text-[var(--rota-text)]">
+                {analiseMelhoresDiasHorarios.melhorFaixa.rotulo}
+              </span>
+              <span className="block text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
+                {formatarMoeda(analiseMelhoresDiasHorarios.melhorFaixa.media)}
+                /dia
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-1.5 pt-1 border-t border-[var(--rota-line)]">
+            {analiseMelhoresDiasHorarios.mediasDiasSemana.map((item) => {
+              const largura =
+                item.media > 0
+                  ? Math.max(
+                      4,
+                      Math.round(
+                        (item.media /
+                          analiseMelhoresDiasHorarios.maxMediaDiaSemana) *
+                          100
+                      )
+                    )
+                  : 0;
+              const ehMelhor =
+                item.diaSemana ===
+                  analiseMelhoresDiasHorarios.melhorDia.diaSemana &&
+                item.media > 0;
+              return (
+                <div
+                  key={item.diaSemana}
+                  className="grid grid-cols-[34px_1fr_auto] items-center gap-2 text-[13px] tabular-nums"
+                >
+                  <span
+                    className={
+                      ehMelhor
+                        ? 'font-extrabold text-[var(--rota-accent)]'
+                        : 'font-bold text-[var(--rota-text-soft)]'
+                    }
+                  >
+                    {item.rotulo}
+                  </span>
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--rota-surface-2)]">
+                    <div
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{
+                        width: `${largura}%`,
+                        backgroundColor: ehMelhor
+                          ? 'var(--rota-accent)'
+                          : 'var(--rota-text-soft)',
+                      }}
+                    />
+                  </div>
+                  <span className="font-bold text-[var(--rota-text)]">
+                    {formatarMoeda(item.media)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* Cartão Por plataforma */}
       <section aria-label="Por plataforma" className="rota-card px-4 py-3.5">
         <h2 className="mb-3 text-[15px] font-extrabold text-[var(--rota-text)]">
@@ -344,6 +661,9 @@ export const Resumo: React.FC<ResumoProps> = ({
                   </span>
                   <span className="ml-1.5 text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
                     {Math.round(item.percentual)}%
+                    {item.entregas > 0
+                      ? ` · ${formatarMoeda(item.valorPorEntrega)}/ent.`
+                      : ''}
                   </span>
                 </div>
                 <span className="font-extrabold text-[var(--rota-text)] tabular-nums shrink-0">
