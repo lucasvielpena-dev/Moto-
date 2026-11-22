@@ -73,10 +73,13 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         includeAssets: [
           'icon.svg',
+          'favicon-32x32.png',
+          'favicon-16x16.png',
           'apple-touch-icon.png',
           'pwa-192x192.png',
           'pwa-512x512.png',
           'pwa-maskable-512x512.png',
+          'og-image.png',
         ],
         manifest: {
           id: '/',
