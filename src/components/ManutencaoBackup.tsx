@@ -967,31 +967,31 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
           <button
             type="button"
             onClick={handleSalvarBackup}
-            className="flex h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-surface-2)] px-2 text-[14px] font-extrabold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
+            className="flex min-h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-surface-2)] px-2 text-[14px] font-extrabold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
           >
             Salvar
           </button>
           <button
             type="button"
             onClick={() => inputRestoreRef.current?.click()}
-            className="flex h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-surface-2)] px-2 text-[14px] font-extrabold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
+            className="flex min-h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-surface-2)] px-2 text-[14px] font-extrabold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
           >
             Restaurar
           </button>
           <button
             type="button"
             onClick={handleExportarCsv}
-            className="flex h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-surface-2)] px-2 text-[14px] font-extrabold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
+            className="flex min-h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-surface-2)] px-2 text-[14px] font-extrabold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
           >
             CSV
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2">
           <button
             type="button"
             onClick={handleCompartilharBackup}
-            className="flex h-[48px] items-center justify-center gap-2 rounded-[14px] bg-[var(--rota-surface-2)] px-3 text-[14px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
+            className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[14px] bg-[var(--rota-surface-2)] px-4 text-[14px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
           >
             <Share2 className="h-4 w-4 shrink-0" aria-hidden="true" />
             Compartilhar backup
@@ -999,7 +999,7 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
           <button
             type="button"
             onClick={handleCompartilharResumoDia}
-            className="flex h-[48px] items-center justify-center gap-2 rounded-[14px] bg-[var(--rota-surface-2)] px-3 text-[14px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
+            className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[14px] bg-[var(--rota-surface-2)] px-4 text-[14px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
           >
             <Share2 className="h-4 w-4 shrink-0" aria-hidden="true" />
             Compartilhar resumo do dia
@@ -1009,7 +1009,7 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
         <button
           type="button"
           onClick={() => setRelatorioMesAberto(true)}
-          className="flex h-[48px] w-full items-center justify-center gap-2 rounded-[14px] bg-[var(--rota-accent-tint)] px-3 text-[14px] font-extrabold text-[var(--rota-accent)] active:scale-[0.98]"
+          className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[14px] bg-[var(--rota-accent-tint)] px-4 text-[14px] font-extrabold text-[var(--rota-accent)] active:scale-[0.98]"
         >
           <Printer className="h-4 w-4 shrink-0" aria-hidden="true" />
           Relatório do mês

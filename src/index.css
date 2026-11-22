@@ -189,6 +189,26 @@
   flex-shrink: 0;
 }
 
+@media (max-width: 389px) {
+  .rota-odo-digit,
+  .rota-odo-digit-decimal {
+    width: 24px;
+    height: 38px;
+    font-size: 22px;
+    border-radius: 7px;
+  }
+}
+
+@media (max-width: 349px) {
+  .rota-odo-digit,
+  .rota-odo-digit-decimal {
+    width: 21px;
+    height: 34px;
+    font-size: 19px;
+    border-radius: 6px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

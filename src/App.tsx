@@ -529,7 +529,7 @@ export default function App() {
 
   const paddingBottomClass =
     abaAtiva === 'hoje'
-      ? 'pb-[calc(128px+env(safe-area-inset-bottom))]'
+      ? 'pb-[calc(140px+env(safe-area-inset-bottom))]'
       : 'pb-[calc(84px+env(safe-area-inset-bottom))]';
 
   return (
@@ -544,7 +544,7 @@ export default function App() {
           className={abaAtiva === 'hoje' ? 'space-y-2.5' : 'hidden'}
         >
           {/* 1. Cabeçalho */}
-          <header className="flex items-center justify-between gap-2">
+          <header className="flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
               <h1 className="text-[24px] leading-[28px] font-extrabold text-[var(--rota-text)]">
                 Hoje
@@ -554,31 +554,33 @@ export default function App() {
               </p>
             </div>
 
-            <div className="flex shrink-0 items-center gap-1.5">
-              {avisoVencimento && (
-                <button
-                  type="button"
-                  onClick={handleIrParaAjustes}
-                  className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[13px] font-extrabold ${
-                    avisoVencimento.vencido
-                      ? 'bg-[var(--rota-danger-tint)] text-[var(--rota-danger)]'
-                      : 'bg-[var(--rota-surface-2)] text-[var(--rota-text)]'
-                  }`}
-                >
-                  {avisoVencimento.texto}
-                </button>
-              )}
+            {(avisoVencimento || odometroInfo.status === 'running') && (
+              <div className="flex flex-wrap items-center justify-end gap-1.5 max-w-full">
+                {avisoVencimento && (
+                  <button
+                    type="button"
+                    onClick={handleIrParaAjustes}
+                    className={`inline-flex min-h-[48px] max-w-full items-center rounded-[14px] px-3 text-[13px] font-extrabold active:scale-[0.98] ${
+                      avisoVencimento.vencido
+                        ? 'bg-[var(--rota-danger-tint)] text-[var(--rota-danger)]'
+                        : 'bg-[var(--rota-surface-2)] text-[var(--rota-text)]'
+                    }`}
+                  >
+                    <span className="truncate">{avisoVencimento.texto}</span>
+                  </button>
+                )}
 
-              {odometroInfo.status === 'running' && (
-                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--rota-success-tint)] px-2.5 py-1 text-[13px] font-extrabold text-[var(--rota-success)]">
-                  <span
-                    className="h-2 w-2 rounded-full bg-[var(--rota-success)]"
-                    aria-hidden="true"
-                  />
-                  GPS ativo
-                </span>
-              )}
-            </div>
+                {odometroInfo.status === 'running' && (
+                  <span className="inline-flex min-h-[32px] shrink-0 items-center gap-1.5 rounded-full bg-[var(--rota-success-tint)] px-2.5 py-1 text-[13px] font-extrabold text-[var(--rota-success)]">
+                    <span
+                      className="h-2 w-2 rounded-full bg-[var(--rota-success)]"
+                      aria-hidden="true"
+                    />
+                    GPS ativo
+                  </span>
+                )}
+              </div>
+            )}
           </header>
 
           {/* 2. Cartão de ganhos */}
@@ -596,25 +598,23 @@ export default function App() {
               {formatarMoeda(resumoHoje.ganhos)}
             </span>
 
-            <div
-              role="progressbar"
-              aria-label="Progresso da meta diária"
-              aria-valuemin={0}
-              aria-valuemax={metaDiaria > 0 ? metaDiaria : 100}
-              aria-valuenow={
-                metaDiaria > 0 ? Math.min(resumoHoje.ganhos, metaDiaria) : 0
-              }
-              className="mt-2 h-[10px] w-full overflow-hidden rounded-full bg-[var(--rota-surface-2)]"
-            >
-              <div
-                className="h-full rounded-full bg-[var(--rota-accent)] transition-all duration-300"
-                style={{ width: `${progressoMetaHoje}%` }}
-              />
-            </div>
+            {metaDiaria > 0 ? (
+              <>
+                <div
+                  role="progressbar"
+                  aria-label="Progresso da meta diária"
+                  aria-valuemin={0}
+                  aria-valuemax={metaDiaria}
+                  aria-valuenow={Math.min(resumoHoje.ganhos, metaDiaria)}
+                  className="mt-2 h-[10px] w-full overflow-hidden rounded-full bg-[var(--rota-surface-2)]"
+                >
+                  <div
+                    className="h-full rounded-full bg-[var(--rota-accent)] transition-all duration-300"
+                    style={{ width: `${progressoMetaHoje}%` }}
+                  />
+                </div>
 
-            <div className="mt-1.5 flex items-center justify-between gap-2 text-[13px] font-semibold tabular-nums">
-              {metaDiaria > 0 ? (
-                <>
+                <div className="mt-1.5 flex items-center justify-between gap-2 text-[13px] font-semibold tabular-nums">
                   <span className="text-[var(--rota-text-soft)]">
                     {Math.round(progressoMetaHoje)}% da meta de{' '}
                     {formatarMoeda(metaDiaria)}
@@ -624,35 +624,40 @@ export default function App() {
                       ? `faltam ${formatarMoeda(faltamMetaHoje)}`
                       : 'meta batida'}
                   </span>
-                </>
-              ) : (
+                </div>
+              </>
+            ) : (
+              <div className="mt-1.5">
                 <button
                   type="button"
                   onClick={handleIrParaAjustes}
-                  className="inline-flex min-h-[48px] -my-3.5 items-center font-extrabold text-[var(--rota-accent)]"
+                  className="inline-flex h-[48px] items-center rounded-[14px] bg-[var(--rota-accent-tint)] px-3.5 text-[14px] font-extrabold text-[var(--rota-accent)] active:scale-[0.98]"
                 >
                   Definir meta
                 </button>
-              )}
-            </div>
+              </div>
+            )}
 
-            <div className="mt-1 text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
-              {resumoHoje.entregas > 0
-                ? `${formatarMoeda(valorPorEntregaHoje)} por entrega`
-                : '— por entrega'}{' '}
-              ·{' '}
-              {entregasPorHoraHoje !== null
-                ? `${entregasPorHoraHoje.toFixed(1).replace('.', ',')} entregas/h`
-                : '—'}
+            <div className="mt-2 flex items-center justify-between gap-2 border-t border-[var(--rota-line)] pt-2 text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
+              <span>
+                {resumoHoje.entregas > 0
+                  ? `${formatarMoeda(valorPorEntregaHoje)} por entrega`
+                  : '— por entrega'}
+              </span>
+              <span className="shrink-0">
+                {entregasPorHoraHoje !== null
+                  ? `${entregasPorHoraHoje.toFixed(1).replace('.', ',')} entregas/h`
+                  : '—'}
+              </span>
             </div>
           </section>
 
           {/* 3. Cartão com 3 colunas: Gastos, Lucro, Distância */}
           <section
             aria-label="Resumo rápido de hoje"
-            className="rota-card grid grid-cols-3 gap-2 px-4 py-2.5"
+            className="rota-card grid grid-cols-3 divide-x divide-[var(--rota-line)] px-4 py-2.5"
           >
-            <div className="min-w-0">
+            <div className="min-w-0 pr-2">
               <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
                 Gastos
               </span>
@@ -661,7 +666,7 @@ export default function App() {
               </span>
             </div>
 
-            <div className="min-w-0">
+            <div className="min-w-0 px-2.5">
               <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
                 Lucro
               </span>
@@ -678,7 +683,7 @@ export default function App() {
               </span>
             </div>
 
-            <div className="min-w-0">
+            <div className="min-w-0 pl-2.5">
               <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
                 Distância
               </span>
@@ -717,8 +722,10 @@ export default function App() {
             </span>
 
             {reservaKm > 0 && (
-              <span className="mt-0.5 block text-[13px] font-bold text-[var(--rota-text)] tabular-nums">
-                Lucro real por km:{' '}
+              <div className="mt-2 flex items-center justify-between gap-2 border-t border-[var(--rota-line)] pt-2 text-[13px] font-bold tabular-nums">
+                <span className="text-[var(--rota-text-soft)]">
+                  Lucro real por km
+                </span>
                 <span
                   className={
                     resumoHoje.km <= 0
@@ -734,7 +741,7 @@ export default function App() {
                     ? formatarMoeda(lucroRealPorKmHoje)
                     : '—'}
                 </span>
-              </span>
+              </div>
             )}
           </section>
 

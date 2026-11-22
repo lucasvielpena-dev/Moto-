@@ -372,8 +372,10 @@ export const Resumo: React.FC<ResumoProps> = ({
           {formatarMoeda(ganhoPorKm)} − {formatarMoeda(custoPorKm)} por km
         </span>
         {reservaKm > 0 && (
-          <span className="mt-1 block text-[13px] font-bold text-[var(--rota-text)] tabular-nums">
-            Lucro real por km:{' '}
+          <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-[var(--rota-line)] pt-2.5 text-[13px] font-bold tabular-nums">
+            <span className="text-[var(--rota-text-soft)]">
+              Lucro real por km
+            </span>
             <span
               className={
                 kmExibido <= 0
@@ -387,7 +389,7 @@ export const Resumo: React.FC<ResumoProps> = ({
             >
               {kmExibido > 0 ? formatarMoeda(lucroRealPorKm) : '—'}
             </span>
-          </span>
+          </div>
         )}
       </section>
 
@@ -396,8 +398,8 @@ export const Resumo: React.FC<ResumoProps> = ({
         aria-label="Totais do período"
         className="rota-card px-4 py-3.5 space-y-3"
       >
-        <div className="grid grid-cols-3 gap-3">
-          <div className="min-w-0">
+        <div className="grid grid-cols-3 divide-x divide-[var(--rota-line)]">
+          <div className="min-w-0 pr-2">
             <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
               Ganhos
             </span>
@@ -406,7 +408,7 @@ export const Resumo: React.FC<ResumoProps> = ({
             </span>
           </div>
 
-          <div className="min-w-0">
+          <div className="min-w-0 px-2.5">
             <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
               Gastos
             </span>
@@ -415,7 +417,7 @@ export const Resumo: React.FC<ResumoProps> = ({
             </span>
           </div>
 
-          <div className="min-w-0">
+          <div className="min-w-0 pl-2.5">
             <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
               Lucro
             </span>
@@ -434,8 +436,8 @@ export const Resumo: React.FC<ResumoProps> = ({
         </div>
 
         {mostrarReservasMes && (
-          <div className="grid grid-cols-2 gap-3 border-t border-[var(--rota-line)] pt-3">
-            <div className="min-w-0">
+          <div className="grid grid-cols-2 divide-x divide-[var(--rota-line)] border-t border-[var(--rota-line)] pt-3">
+            <div className="min-w-0 pr-3">
               <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
                 Reservar
               </span>
@@ -444,7 +446,7 @@ export const Resumo: React.FC<ResumoProps> = ({
               </span>
             </div>
 
-            <div className="min-w-0">
+            <div className="min-w-0 pl-3">
               <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
                 Lucro livre
               </span>
@@ -467,9 +469,9 @@ export const Resumo: React.FC<ResumoProps> = ({
       {/* Cartão de Entregas no período */}
       <section
         aria-label="Entregas do período"
-        className="rota-card grid grid-cols-3 gap-3 px-4 py-3.5"
+        className="rota-card grid grid-cols-3 divide-x divide-[var(--rota-line)] px-4 py-3.5"
       >
-        <div className="min-w-0">
+        <div className="min-w-0 pr-2">
           <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
             Entregas
           </span>
@@ -478,7 +480,7 @@ export const Resumo: React.FC<ResumoProps> = ({
           </span>
         </div>
 
-        <div className="min-w-0">
+        <div className="min-w-0 px-2.5">
           <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
             Por entrega
           </span>
@@ -487,7 +489,7 @@ export const Resumo: React.FC<ResumoProps> = ({
           </span>
         </div>
 
-        <div className="min-w-0">
+        <div className="min-w-0 pl-2.5">
           <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
             Entregas/h
           </span>

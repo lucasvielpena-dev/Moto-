@@ -651,7 +651,7 @@ export const Odometro: React.FC<OdometroProps> = ({
       {!oculto && (
         <div
           onClick={() => setSheetAberto(true)}
-          className="rota-card flex cursor-pointer items-center justify-between gap-3 px-4 py-3"
+          className="rota-card flex cursor-pointer items-center justify-between gap-2.5 px-3.5 sm:px-4 py-3"
         >
           <button
             type="button"
@@ -660,14 +660,14 @@ export const Odometro: React.FC<OdometroProps> = ({
               setSheetAberto(true);
             }}
             aria-label={`${rotuloTopoOdometro}: ${formatarKm(kmAtual)} km. Toque para detalhes.`}
-            className="flex min-w-0 flex-1 flex-col items-start text-left"
+            className="flex min-w-0 flex-1 flex-col items-start overflow-hidden text-left"
           >
-            <span className="text-[13px] leading-[18px] font-bold text-[var(--rota-text-soft)]">
+            <span className="max-w-full truncate text-[13px] leading-[18px] font-bold text-[var(--rota-text-soft)]">
               {rotuloTopoOdometro}
             </span>
 
             <div
-              className="mt-1 flex items-baseline gap-[4px]"
+              className="mt-1 flex max-w-full flex-nowrap items-baseline gap-[3px] sm:gap-[4px]"
               aria-hidden="true"
             >
               {digitosInteiros.map((digito, idx) => (
@@ -679,7 +679,7 @@ export const Odometro: React.FC<OdometroProps> = ({
                 ,
               </span>
               <span className="rota-odo-digit-decimal">{parteDecimal}</span>
-              <span className="ml-0.5 text-[15px] leading-none font-extrabold text-[var(--rota-text-soft)]">
+              <span className="ml-0.5 shrink-0 text-[14px] sm:text-[15px] leading-none font-extrabold text-[var(--rota-text-soft)]">
                 km
               </span>
             </div>
@@ -699,7 +699,7 @@ export const Odometro: React.FC<OdometroProps> = ({
                 handleIniciarOuContinuar();
               }
             }}
-            className={`inline-flex min-h-[48px] shrink-0 items-center justify-center rounded-[14px] px-3.5 text-[14px] font-extrabold whitespace-nowrap active:scale-[0.98] ${
+            className={`inline-flex h-[48px] min-w-[92px] sm:min-w-[100px] shrink-0 items-center justify-center rounded-[14px] px-3 text-[14px] font-extrabold whitespace-nowrap active:scale-[0.98] ${
               status === 'running'
                 ? 'bg-[var(--rota-surface-2)] text-[var(--rota-text)]'
                 : 'bg-[var(--rota-accent)] text-[var(--rota-on-accent)]'
@@ -806,47 +806,49 @@ export const Odometro: React.FC<OdometroProps> = ({
                 </div>
               )}
 
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={
-                    status === 'running'
-                      ? handlePausar
-                      : handleIniciarOuContinuar
-                  }
-                  className={`flex min-h-[48px] flex-1 items-center justify-center rounded-[14px] px-4 text-[15px] font-extrabold active:scale-[0.98] ${
-                    status === 'running'
-                      ? 'bg-[var(--rota-surface-2)] text-[var(--rota-text)]'
-                      : 'bg-[var(--rota-accent)] text-[var(--rota-on-accent)]'
-                  }`}
-                >
-                  {status === 'running'
-                    ? 'Pausar'
-                    : status === 'paused'
-                      ? 'Continuar'
-                      : 'Iniciar'}
-                </button>
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={
+                      status === 'running'
+                        ? handlePausar
+                        : handleIniciarOuContinuar
+                    }
+                    className={`flex h-[48px] items-center justify-center rounded-[14px] px-3 text-[15px] font-extrabold whitespace-nowrap active:scale-[0.98] ${
+                      status === 'running'
+                        ? 'bg-[var(--rota-surface-2)] text-[var(--rota-text)]'
+                        : 'bg-[var(--rota-accent)] text-[var(--rota-on-accent)]'
+                    }`}
+                  >
+                    {status === 'running'
+                      ? 'Pausar'
+                      : status === 'paused'
+                        ? 'Continuar'
+                        : 'Iniciar'}
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={handleSalvarTrajetoGps}
-                  disabled={kmAtual <= 0}
-                  className={`flex min-h-[48px] flex-1 items-center justify-center rounded-[14px] px-4 text-[15px] font-extrabold whitespace-nowrap active:scale-[0.98] ${
-                    kmAtual > 0
-                      ? 'bg-[var(--rota-surface-2)] text-[var(--rota-text)]'
-                      : 'bg-[var(--rota-surface-2)] text-[var(--rota-text-soft)] opacity-50 cursor-not-allowed'
-                  }`}
-                >
-                  Encerrar turno
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleSalvarTrajetoGps}
+                    disabled={kmAtual <= 0}
+                    className={`flex h-[48px] items-center justify-center rounded-[14px] px-3 text-[15px] font-extrabold whitespace-nowrap active:scale-[0.98] ${
+                      kmAtual > 0
+                        ? 'bg-[var(--rota-surface-2)] text-[var(--rota-text)]'
+                        : 'bg-[var(--rota-surface-2)] text-[var(--rota-text-soft)] opacity-50 cursor-not-allowed'
+                    }`}
+                  >
+                    Encerrar turno
+                  </button>
+                </div>
 
                 {status === 'paused' && (kmAtual > 0 || tempoSegundos > 0) && (
                   <button
                     type="button"
                     onClick={handleZerar}
-                    className="flex min-h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-danger-tint)] px-4 text-[14px] font-extrabold text-[var(--rota-danger)] active:scale-[0.98]"
+                    className="flex h-[48px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-danger-tint)] px-4 text-[14px] font-extrabold text-[var(--rota-danger)] active:scale-[0.98]"
                   >
-                    Descartar
+                    Descartar turno atual
                   </button>
                 )}
               </div>
