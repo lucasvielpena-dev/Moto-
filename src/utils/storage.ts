@@ -13,6 +13,21 @@ const KEY_ODOMETRO_SEGUNDOS = 'rota_odometro_segundos_v1';
 const KEY_META_DIARIA = 'rota_meta_diaria_v1';
 const KEY_ULTIMO_KM_PAINEL = 'rota_ultimo_km_painel_v1';
 const KEY_CONFIG_OLEO = 'rota_config_oleo_v1';
+const KEY_PERCENTUAL_RESERVA = 'rota_percentual_reserva_v1';
+const KEY_ENTREGA_ATIVA = 'rota_odometro_entrega_ativa_v1';
+const KEY_TEMA = 'rota_tema_v1';
+const KEY_MIN_LUCRO_KM = 'rota_min_lucro_km_v1';
+const KEY_MODO_MOVIMENTO = 'rota_modo_movimento_v1';
+const KEY_CONTRASTE = 'rota_contraste_v1';
+
+export type PreferenciaTema = 'auto' | 'claro' | 'escuro';
+
+export interface EntregaEmAndamento {
+  ativa: boolean;
+  kmInicio: number;
+  tempoInicioSegundos: number;
+  iniciadaEm: string;
+}
 
 export interface ConfigTrocaOleo {
   intervaloKm: number;
@@ -49,6 +64,20 @@ function sanitizarLancamentos(itens: unknown[]): Lancamento[] {
       observacao:
         typeof item.observacao === 'string' && item.observacao.trim()
           ? item.observacao.trim().slice(0, 80)
+          : undefined,
+      kmEntrega:
+        item.tipo === TipoLancamento.GANHO &&
+        typeof item.kmEntrega === 'number' &&
+        Number.isFinite(item.kmEntrega) &&
+        item.kmEntrega > 0
+          ? Number(item.kmEntrega.toFixed(2))
+          : undefined,
+      duracaoEntregaSegundos:
+        item.tipo === TipoLancamento.GANHO &&
+        typeof item.duracaoEntregaSegundos === 'number' &&
+        Number.isFinite(item.duracaoEntregaSegundos) &&
+        item.duracaoEntregaSegundos > 0
+          ? Math.floor(item.duracaoEntregaSegundos)
           : undefined,
     }));
 }
@@ -160,6 +189,51 @@ export function salvarTempoOdometroSegundos(segundos: number): void {
   }
 }
 
+export function carregarEntregaEmAndamento(): EntregaEmAndamento | null {
+  try {
+    const raw = localStorage.getItem(KEY_ENTREGA_ATIVA);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<EntregaEmAndamento>;
+    if (
+      !parsed ||
+      parsed.ativa !== true ||
+      typeof parsed.kmInicio !== 'number' ||
+      !Number.isFinite(parsed.kmInicio) ||
+      parsed.kmInicio < 0 ||
+      typeof parsed.tempoInicioSegundos !== 'number' ||
+      !Number.isFinite(parsed.tempoInicioSegundos) ||
+      parsed.tempoInicioSegundos < 0
+    ) {
+      return null;
+    }
+    return {
+      ativa: true,
+      kmInicio: parsed.kmInicio,
+      tempoInicioSegundos: Math.floor(parsed.tempoInicioSegundos),
+      iniciadaEm:
+        typeof parsed.iniciadaEm === 'string'
+          ? parsed.iniciadaEm
+          : new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function salvarEntregaEmAndamento(
+  entrega: EntregaEmAndamento | null
+): void {
+  try {
+    if (!entrega) {
+      localStorage.removeItem(KEY_ENTREGA_ATIVA);
+    } else {
+      localStorage.setItem(KEY_ENTREGA_ATIVA, JSON.stringify(entrega));
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 export function carregarMetaDiaria(): number {
   try {
     const raw = localStorage.getItem(KEY_META_DIARIA);
@@ -174,6 +248,83 @@ export function carregarMetaDiaria(): number {
 export function salvarMetaDiaria(meta: number): void {
   try {
     localStorage.setItem(KEY_META_DIARIA, String(meta));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function carregarMinLucroKm(): number {
+  try {
+    const raw = localStorage.getItem(KEY_MIN_LUCRO_KM);
+    if (!raw) return 0;
+    const num = Number(raw);
+    return Number.isFinite(num) && num >= 0 ? num : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function salvarMinLucroKm(valor: number): void {
+  try {
+    if (Number.isFinite(valor) && valor >= 0) {
+      localStorage.setItem(KEY_MIN_LUCRO_KM, String(valor));
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function carregarTema(): PreferenciaTema {
+  try {
+    const raw = localStorage.getItem(KEY_TEMA);
+    if (raw === 'claro' || raw === 'escuro' || raw === 'auto') {
+      return raw;
+    }
+    return 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
+export function salvarTema(tema: PreferenciaTema): void {
+  try {
+    localStorage.setItem(KEY_TEMA, tema);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function carregarModoMovimento(): boolean {
+  try {
+    const raw = localStorage.getItem(KEY_MODO_MOVIMENTO);
+    if (raw === 'false' || raw === '0') return false;
+    if (raw === 'true' || raw === '1') return true;
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+export function salvarModoMovimento(ativo: boolean): void {
+  try {
+    localStorage.setItem(KEY_MODO_MOVIMENTO, ativo ? 'true' : 'false');
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function carregarAltoContraste(): boolean {
+  try {
+    const raw = localStorage.getItem(KEY_CONTRASTE);
+    return raw === 'high';
+  } catch {
+    return false;
+  }
+}
+
+export function salvarAltoContraste(ativo: boolean): void {
+  try {
+    localStorage.setItem(KEY_CONTRASTE, ativo ? 'high' : 'normal');
   } catch {
     // Ignore storage errors
   }
@@ -235,6 +386,27 @@ export function salvarConfigOleo(config: ConfigTrocaOleo): void {
   }
 }
 
+export function carregarPercentualReserva(): number {
+  try {
+    const raw = localStorage.getItem(KEY_PERCENTUAL_RESERVA);
+    if (!raw) return 30;
+    const num = Number(raw);
+    return Number.isFinite(num) && num >= 0 && num <= 100 ? num : 30;
+  } catch {
+    return 30;
+  }
+}
+
+export function salvarPercentualReserva(percentual: number): void {
+  try {
+    if (Number.isFinite(percentual) && percentual >= 0 && percentual <= 100) {
+      localStorage.setItem(KEY_PERCENTUAL_RESERVA, String(percentual));
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 export function gerarId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -246,6 +418,10 @@ export interface BackupRota {
   versao: 1;
   exportadoEm: string;
   metaDiaria: number;
+  minLucroKm?: number;
+  modoMovimento?: boolean;
+  altoContraste?: boolean;
+  percentualReserva?: number;
   configOleo?: ConfigTrocaOleo;
   lancamentos: Lancamento[];
   trajetos: Trajeto[];
@@ -269,7 +445,9 @@ export function gerarConteudoCsv(
         item.tipo === TipoLancamento.GANHO ? 'Ganho' : 'Gasto',
         escapar(item.categoria),
         item.valor.toFixed(2).replace('.', ','),
-        '',
+        typeof item.kmEntrega === 'number' && item.kmEntrega > 0
+          ? item.kmEntrega.toFixed(2).replace('.', ',')
+          : '',
         escapar(item.observacao ?? ''),
       ].join(';')
     );
@@ -316,6 +494,23 @@ export function validarEConverterBackupJson(texto: string): BackupRota | null {
         ? Number(parsed.metaDiaria.toFixed(2))
         : 0;
 
+    const minLucroKm =
+      typeof parsed.minLucroKm === 'number' &&
+      Number.isFinite(parsed.minLucroKm) &&
+      parsed.minLucroKm >= 0
+        ? Number(parsed.minLucroKm.toFixed(2))
+        : undefined;
+
+    const modoMovimento =
+      typeof parsed.modoMovimento === 'boolean'
+        ? parsed.modoMovimento
+        : undefined;
+
+    const altoContraste =
+      typeof parsed.altoContraste === 'boolean'
+        ? parsed.altoContraste
+        : undefined;
+
     let configOleo: ConfigTrocaOleo | undefined;
     if (parsed.configOleo && typeof parsed.configOleo === 'object') {
       const interval = parsed.configOleo.intervaloKm;
@@ -339,6 +534,14 @@ export function validarEConverterBackupJson(texto: string): BackupRota | null {
       }
     }
 
+    const percentualReserva =
+      typeof parsed.percentualReserva === 'number' &&
+      Number.isFinite(parsed.percentualReserva) &&
+      parsed.percentualReserva >= 0 &&
+      parsed.percentualReserva <= 100
+        ? Number(parsed.percentualReserva.toFixed(1))
+        : undefined;
+
     return {
       versao: 1,
       exportadoEm:
@@ -346,6 +549,10 @@ export function validarEConverterBackupJson(texto: string): BackupRota | null {
           ? parsed.exportadoEm
           : new Date().toISOString(),
       metaDiaria,
+      minLucroKm,
+      modoMovimento,
+      altoContraste,
+      percentualReserva,
       configOleo,
       lancamentos: lancamentosValidos,
       trajetos: trajetosValidos,

@@ -1,40 +1,53 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertCircle,
-  Check,
-  ChevronDown,
-  ChevronUp,
-  ExternalLink,
-  Navigation,
-  Pause,
-  Play,
-  Plus,
-  RefreshCw,
-  RotateCcw,
-  Save,
-} from 'lucide-react';
-import { StatusOdometro } from '../types';
+  Lancamento,
+  PLATAFORMAS,
+  Plataforma,
+  StatusOdometro,
+  TipoLancamento,
+} from '../types';
 import {
   formatarDuracao,
   formatarKm,
+  formatarMoeda,
   parseValorNumerico,
+  rotuloCategoria,
 } from '../utils/formatters';
 import { calcularDistanciaHaversineKm, Coordenada } from '../utils/geo';
 import {
+  EntregaEmAndamento,
+  carregarEntregaEmAndamento,
   carregarKmEmAndamento,
   carregarTempoOdometroSegundos,
   carregarUltimoKmPainel,
+  salvarEntregaEmAndamento,
   salvarKmEmAndamento,
   salvarTempoOdometroSegundos,
   salvarUltimoKmPainel,
 } from '../utils/storage';
 
 interface OdometroProps {
+  oculto?: boolean;
+  lancamentos?: Lancamento[];
   onSalvarTrajeto: (
     km: number,
     origem: 'gps' | 'manual',
     duracaoSegundos?: number
   ) => void;
+  onFinalizarEntrega?: (dados: {
+    valor: number;
+    categoria: Plataforma;
+    kmEntrega?: number;
+    duracaoEntregaSegundos?: number;
+    observacao?: string;
+  }) => void;
+  onStatusChange?: (info: {
+    status: StatusOdometro;
+    km: number;
+    tempoSegundos: number;
+    entregaAtiva: boolean;
+    kmEntregaAtual: number;
+  }) => void;
 }
 
 export type CodigoErroGeolocalizacao =
@@ -145,19 +158,42 @@ function traduzirErroGeolocalizacao(
   };
 }
 
-export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
+export const Odometro: React.FC<OdometroProps> = ({
+  oculto = false,
+  lancamentos = [],
+  onSalvarTrajeto,
+  onFinalizarEntrega,
+  onStatusChange,
+}) => {
   const [kmAtual, setKmAtual] = useState<number>(() => carregarKmEmAndamento());
   const [tempoSegundos, setTempoSegundos] = useState<number>(() =>
     carregarTempoOdometroSegundos()
   );
-  const [status, setStatus] = useState<StatusOdometro>(() => 'running');
+  const [status, setStatus] = useState<StatusOdometro>(() =>
+    carregarKmEmAndamento() > 0 || carregarTempoOdometroSegundos() > 0
+      ? 'paused'
+      : 'idle'
+  );
+  const [entregaAtiva, setEntregaAtiva] = useState<EntregaEmAndamento | null>(
+    () => carregarEntregaEmAndamento()
+  );
+
+  const [sheetAberto, setSheetAberto] = useState<boolean>(false);
+  const [modalEntregaAberto, setModalEntregaAberto] = useState<boolean>(false);
+  const [entregaPlataforma, setEntregaPlataforma] = useState<Plataforma>(
+    Plataforma.IFOOD
+  );
+  const [entregaValorTexto, setEntregaValorTexto] = useState<string>('');
+  const [entregaObs, setEntregaObs] = useState<string>('');
+  const [erroEntrega, setErroEntrega] = useState<string | null>(null);
+  const [avisoTrajeto, setAvisoTrajeto] = useState<string | null>(null);
+
   const [precisaoMetros, setPrecisaoMetros] = useState<number | null>(null);
   const [velocidadeKmh, setVelocidadeKmh] = useState<number | null>(null);
   const [aguardandoSinal, setAguardandoSinal] = useState<boolean>(false);
   const [wakeLockAtivo, setWakeLockAtivo] = useState<boolean>(false);
   const [erroGps, setErroGps] = useState<ErroGeolocalizacaoState | null>(null);
 
-  const [manualAberto, setManualAberto] = useState<boolean>(false);
   const [modoManual, setModoManual] = useState<'distancia' | 'painel'>('distancia');
   const [kmManualTexto, setKmManualTexto] = useState<string>('');
   const [kmInicialTexto, setKmInicialTexto] = useState<string>(() => {
@@ -174,6 +210,27 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
   const statusRef = useRef<StatusOdometro>(status);
   const kmAtualRef = useRef<number>(kmAtual);
 
+  const plataformasOrdenadas = useMemo(() => {
+    const contagem = new Map<string, number>();
+    for (const item of lancamentos) {
+      if (item.tipo === TipoLancamento.GANHO) {
+        contagem.set(item.categoria, (contagem.get(item.categoria) ?? 0) + 1);
+      }
+    }
+    return [...PLATAFORMAS].sort((a, b) => {
+      const diff = (contagem.get(b) ?? 0) - (contagem.get(a) ?? 0);
+      if (diff !== 0) return diff;
+      return PLATAFORMAS.indexOf(a) - PLATAFORMAS.indexOf(b);
+    });
+  }, [lancamentos]);
+
+  const kmEntregaAtual = entregaAtiva
+    ? Math.max(0, kmAtual - entregaAtiva.kmInicio)
+    : 0;
+  const tempoEntregaAtual = entregaAtiva
+    ? Math.max(0, tempoSegundos - entregaAtiva.tempoInicioSegundos)
+    : 0;
+
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
@@ -186,6 +243,20 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
   useEffect(() => {
     salvarTempoOdometroSegundos(tempoSegundos);
   }, [tempoSegundos]);
+
+  useEffect(() => {
+    salvarEntregaEmAndamento(entregaAtiva);
+  }, [entregaAtiva]);
+
+  useEffect(() => {
+    onStatusChange?.({
+      status,
+      km: kmAtual,
+      tempoSegundos,
+      entregaAtiva: Boolean(entregaAtiva),
+      kmEntregaAtual,
+    });
+  }, [status, kmAtual, tempoSegundos, entregaAtiva, kmEntregaAtual, onStatusChange]);
 
   useEffect(() => {
     if (status !== 'running') return;
@@ -291,6 +362,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
       const registroErro = traduzirErroGeolocalizacao(erro);
       registrarLogErroGps(registroErro, erro.code);
       setErroGps(registroErro);
+      setSheetAberto(true);
 
       if (registroErro.codigo === 'PERMISSION_DENIED') {
         pararWatchGps();
@@ -312,6 +384,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
       };
       registrarLogErroGps(registroErro);
       setErroGps(registroErro);
+      setSheetAberto(true);
       setStatus(kmAtualRef.current > 0 ? 'paused' : 'idle');
       return;
     }
@@ -326,6 +399,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
       };
       registrarLogErroGps(registroErro);
       setErroGps(registroErro);
+      setSheetAberto(true);
       setStatus(kmAtualRef.current > 0 ? 'paused' : 'idle');
       return;
     }
@@ -384,14 +458,8 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
     };
   }, [liberarWakeLock, pararWatchGps, solicitarWakeLock]);
 
-  // Odômetro inicia rodando assim que o app abre — o dia em andamento
-  // segue contando mesmo sem uma corrida separada agora
-  useEffect(() => {
-    iniciarWatchGps();
-    void solicitarWakeLock();
-  }, [iniciarWatchGps, solicitarWakeLock]);
-
   const handleIniciarOuContinuar = () => {
+    setAvisoTrajeto(null);
     iniciarWatchGps();
     void solicitarWakeLock();
   };
@@ -402,10 +470,75 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
     setStatus('paused');
   };
 
+  const handleIniciarEntrega = () => {
+    setAvisoTrajeto(null);
+    if (status !== 'running') {
+      iniciarWatchGps();
+      void solicitarWakeLock();
+    }
+    setEntregaAtiva({
+      ativa: true,
+      kmInicio: kmAtual,
+      tempoInicioSegundos: tempoSegundos,
+      iniciadaEm: new Date().toISOString(),
+    });
+  };
+
+  const handleAbrirModalEntrega = () => {
+    setAvisoTrajeto(null);
+    setEntregaPlataforma(plataformasOrdenadas[0] ?? Plataforma.IFOOD);
+    setEntregaValorTexto('');
+    setEntregaObs('');
+    setErroEntrega(null);
+    setModalEntregaAberto(true);
+  };
+
+  const handleCancelarEntrega = () => {
+    setEntregaAtiva(null);
+    setModalEntregaAberto(false);
+    setErroEntrega(null);
+    setAvisoTrajeto(null);
+  };
+
+  const handleConfirmarEntrega = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErroEntrega(null);
+
+    const valor = parseValorNumerico(entregaValorTexto);
+    if (Number.isNaN(valor) || valor <= 0) {
+      setErroEntrega('Informe o valor da entrega maior que R$ 0,00.');
+      return;
+    }
+
+    const kmParaSalvar = Number(kmEntregaAtual.toFixed(2));
+    const duracaoParaSalvar = Math.max(0, Math.floor(tempoEntregaAtual));
+
+    onFinalizarEntrega?.({
+      valor: Number(valor.toFixed(2)),
+      categoria: entregaPlataforma,
+      kmEntrega: kmParaSalvar > 0 ? kmParaSalvar : undefined,
+      duracaoEntregaSegundos:
+        duracaoParaSalvar > 0 ? duracaoParaSalvar : undefined,
+      observacao: entregaObs.trim() || undefined,
+    });
+
+    setEntregaAtiva(null);
+    setModalEntregaAberto(false);
+    setEntregaValorTexto('');
+    setEntregaObs('');
+    mostrarFeedback(`${formatarMoeda(valor)} salvo!`);
+  };
+
   const handleSalvarTrajetoGps = () => {
     if (kmAtual <= 0) return;
+    if (entregaAtiva) {
+      setAvisoTrajeto(
+        'Finalize ou cancele a entrega em andamento antes de encerrar o turno.'
+      );
+      return;
+    }
+    setAvisoTrajeto(null);
     const kmParaSalvar = Number(kmAtual.toFixed(2));
-    const estavaRodando = statusRef.current === 'running';
     pararWatchGps();
     void liberarWakeLock();
     onSalvarTrajeto(
@@ -418,12 +551,9 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
     setPrecisaoMetros(null);
     setVelocidadeKmh(null);
     setErroGps(null);
-    if (estavaRodando) {
-      // o odômetro segue rodando depois de registrar o trajeto
-      iniciarWatchGps();
-      void solicitarWakeLock();
-    }
-    mostrarFeedback('Trajeto salvo!');
+    setStatus('idle');
+    setSheetAberto(false);
+    mostrarFeedback('Turno encerrado!');
   };
 
   const handleZerar = () => {
@@ -431,6 +561,9 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
     void liberarWakeLock();
     setKmAtual(0);
     setTempoSegundos(0);
+    setEntregaAtiva(null);
+    setModalEntregaAberto(false);
+    setAvisoTrajeto(null);
     setPrecisaoMetros(null);
     setVelocidadeKmh(null);
     setErroGps(null);
@@ -469,8 +602,7 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
       salvarUltimoKmPainel(kmFinalNum);
       setKmInicialTexto(kmFinalNum.toFixed(1).replace('.', ','));
       setKmFinalTexto('');
-      setManualAberto(false);
-      mostrarFeedback(`${formatarKm(distancia)} km salvos`);
+      setSheetAberto(false);
       return;
     }
 
@@ -481,318 +613,567 @@ export const Odometro: React.FC<OdometroProps> = ({ onSalvarTrajeto }) => {
     }
     onSalvarTrajeto(Number(valor.toFixed(2)), 'manual');
     setKmManualTexto('');
-    setManualAberto(false);
-    mostrarFeedback(`${formatarKm(valor)} km salvos`);
+    setSheetAberto(false);
   };
 
-  const textoStatus =
+  const rotuloTopoOdometro =
+    status === 'running'
+      ? 'Odômetro · rodando'
+      : status === 'paused'
+        ? 'Odômetro · pausado'
+        : 'Odômetro · parado';
+
+  const kmFormatadoCasinhas = Math.max(0, kmAtual).toFixed(1);
+  const [parteInteiraRaw, parteDecimal = '0'] = kmFormatadoCasinhas.split('.');
+  const digitosInteiros = parteInteiraRaw.padStart(4, '0').split('');
+
+  const subtituloFaixa =
+    status === 'idle' && tempoSegundos === 0
+      ? '00:00:00 em rota · Toque para detalhes'
+      : `${formatarDuracao(tempoSegundos)} em rota${
+          status === 'running' && velocidadeKmh !== null && velocidadeKmh > 0
+            ? ` · ${velocidadeKmh} km/h`
+            : ''
+        }${entregaAtiva ? ` · Entrega ${formatarKm(kmEntregaAtual)} km` : ''}`;
+
+  const textoStatusSheet =
     status === 'running'
       ? aguardandoSinal
-        ? 'Buscando sinal GPS...'
-        : 'Registrando via GPS'
+        ? 'Buscando sinal GPS'
+        : 'GPS ativo'
       : status === 'paused'
-        ? 'Trajeto pausado'
+        ? 'Pausado'
         : 'Pronto para rodar';
 
   return (
-    <section aria-labelledby="titulo-odometro" className="neu-card p-2 sm:p-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="icon-tile text-[var(--rota-accent)]">
-            <Navigation className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden="true" />
-          </div>
-          <div className="min-w-0">
-            <h2 id="titulo-odometro" className="card-title">
-              Odômetro
-            </h2>
-            <p className="text-xs font-medium text-[var(--rota-text-soft)] truncate tabular-nums">
-              {textoStatus}
-              {(status === 'running' || tempoSegundos > 0) &&
-                ` · ${formatarDuracao(tempoSegundos)}`}
-              {status === 'running' &&
-              velocidadeKmh !== null &&
-              velocidadeKmh > 1
-                ? ` · ${velocidadeKmh} km/h`
-                : ''}
-              {status === 'running' && precisaoMetros !== null
-                ? ` · ${precisaoMetros} m`
-                : ''}
-              {status === 'running' && wakeLockAtivo ? ' · Tela ativa' : ''}
-            </p>
-          </div>
-        </div>
-
-        {feedback ? (
-          <span className="inline-flex min-h-[44px] items-center gap-1 text-xs font-semibold text-[var(--rota-success)] whitespace-nowrap shrink-0">
-            <Check className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-            {feedback}
-          </span>
-        ) : (
+    <>
+      {/* Cartão compacto com visual de hodômetro mecânico na aba Hoje */}
+      {!oculto && (
+        <div
+          onClick={() => setSheetAberto(true)}
+          className="rota-card flex cursor-pointer items-center justify-between gap-3 px-4 py-3"
+        >
           <button
             type="button"
-            aria-expanded={manualAberto}
-            onClick={() => {
-              setManualAberto((prev) => !prev);
-              setErroManual(null);
+            onClick={(e) => {
+              e.stopPropagation();
+              setSheetAberto(true);
             }}
-            className="neu-btn-secondary inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-2xl px-3.5 text-xs font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
+            aria-label={`${rotuloTopoOdometro}: ${formatarKm(kmAtual)} km. Toque para detalhes.`}
+            className="flex min-w-0 flex-1 flex-col items-start text-left"
           >
-            Modo manual
-            {manualAberto ? (
-              <ChevronUp className="h-4 w-4 text-[var(--rota-accent)]" strokeWidth={1.75} aria-hidden="true" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-[var(--rota-accent)]" strokeWidth={1.75} aria-hidden="true" />
-            )}
-          </button>
-        )}
-      </div>
+            <span className="text-[13px] leading-[18px] font-bold text-[var(--rota-text-soft)]">
+              {rotuloTopoOdometro}
+            </span>
 
-      {/* Leitura principal da distância */}
-      <div className="my-2 sm:my-3 flex items-baseline justify-center gap-2 text-center">
-        <span className="text-2xl sm:text-3xl font-bold tracking-[-0.03em] text-[var(--rota-text)] tabular-nums">
-          {formatarKm(kmAtual)}
-        </span>
-        <span className="text-lg font-semibold text-[var(--rota-accent)]">km</span>
-      </div>
-
-      {/* Mensagem de erro GPS traduzida */}
-      {erroGps && (
-        <div
-          role="alert"
-          className="mb-4 rounded-2xl bg-[var(--rota-danger-tint)] p-4 text-xs leading-relaxed text-[var(--rota-text)]"
-        >
-          <div className="flex items-start gap-2.5">
-            <AlertCircle
-              className="h-4 w-4 shrink-0 text-[var(--rota-danger)] mt-0.5"
-              strokeWidth={1.75}
+            <div
+              className="mt-1 flex items-baseline gap-[4px]"
               aria-hidden="true"
-            />
-            <div className="space-y-1 min-w-0">
-              <p className="text-sm font-semibold text-[var(--rota-text)]">{erroGps.mensagem}</p>
-              <p className="text-xs text-[var(--rota-text-soft)]">{erroGps.sugestao}</p>
+            >
+              {digitosInteiros.map((digito, idx) => (
+                <span key={idx} className="rota-odo-digit">
+                  {digito}
+                </span>
+              ))}
+              <span className="text-[22px] leading-none font-extrabold text-[var(--rota-text)]">
+                ,
+              </span>
+              <span className="rota-odo-digit-decimal">{parteDecimal}</span>
+              <span className="ml-0.5 text-[15px] leading-none font-extrabold text-[var(--rota-text-soft)]">
+                km
+              </span>
             </div>
-          </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {erroGps.bloqueadoPorIframe && typeof window !== 'undefined' && (
-              <a
-                href={window.location.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-primary-glow inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl px-4 text-xs font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
+            <span className="mt-1 w-full truncate text-[13px] leading-[18px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
+              {subtituloFaixa}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (status === 'running') {
+                handlePausar();
+              } else {
+                handleIniciarOuContinuar();
+              }
+            }}
+            className={`inline-flex min-h-[48px] shrink-0 items-center justify-center rounded-[14px] px-3.5 text-[14px] font-extrabold whitespace-nowrap active:scale-[0.98] ${
+              status === 'running'
+                ? 'bg-[var(--rota-surface-2)] text-[var(--rota-text)]'
+                : 'bg-[var(--rota-accent)] text-[var(--rota-on-accent)]'
+            }`}
+          >
+            {status === 'running'
+              ? 'Pausar'
+              : status === 'paused'
+                ? 'Continuar'
+                : 'Iniciar'}
+          </button>
+        </div>
+      )}
+
+      {/* Bottom sheet de detalhes do odômetro */}
+      {sheetAberto && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center"
+          style={{ backgroundColor: 'var(--rota-backdrop)' }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="titulo-odometro-sheet"
+        >
+          <div className="max-h-[92dvh] w-full sm:max-w-[460px] overflow-y-auto rounded-t-[20px] sm:rounded-[20px] bg-[var(--rota-bg)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h2
+                id="titulo-odometro-sheet"
+                className="text-[20px] font-extrabold text-[var(--rota-text)]"
               >
-                <ExternalLink className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-                Abrir em nova aba
-              </a>
-            )}
-            {erroGps.podeTentarNovamente && (
+                Odômetro
+              </h2>
               <button
                 type="button"
-                onClick={handleIniciarOuContinuar}
-                className="neu-btn-secondary inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl px-4 text-xs font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
+                onClick={() => setSheetAberto(false)}
+                className="inline-flex min-h-[48px] items-center justify-center rounded-[14px] px-3 text-[15px] font-bold text-[var(--rota-text-soft)] hover:text-[var(--rota-text)]"
               >
-                <RefreshCw className="h-4 w-4 text-[var(--rota-accent)]" strokeWidth={1.75} aria-hidden="true" />
-                Tentar novamente
+                Fechar
               </button>
-            )}
+            </div>
+
+            {/* Leitura GPS e controles do turno */}
+            <div className="rota-card p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[13px] font-bold text-[var(--rota-text-soft)] tabular-nums">
+                  {textoStatusSheet}
+                  {(status === 'running' || tempoSegundos > 0) &&
+                    ` · ${formatarDuracao(tempoSegundos)}`}
+                  {status === 'running' && precisaoMetros !== null
+                    ? ` · Precisão ${precisaoMetros} m`
+                    : ''}
+                  {status === 'running' && wakeLockAtivo
+                    ? ' · Tela ativa'
+                    : ''}
+                </span>
+                {feedback && (
+                  <span className="text-[13px] font-bold text-[var(--rota-success)]">
+                    {feedback}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-baseline justify-center gap-1.5 py-1">
+                <span className="text-[40px] leading-none font-extrabold text-[var(--rota-text)] tabular-nums">
+                  {formatarKm(kmAtual)}
+                </span>
+                <span className="text-[15px] font-bold text-[var(--rota-text-soft)]">
+                  km
+                </span>
+              </div>
+
+              {erroGps && (
+                <div
+                  role="alert"
+                  className="rounded-[14px] bg-[var(--rota-danger-tint)] p-3.5 space-y-2"
+                >
+                  <p className="text-[14px] font-extrabold text-[var(--rota-danger)]">
+                    {erroGps.mensagem}
+                  </p>
+                  <p className="text-[13px] font-semibold text-[var(--rota-text)]">
+                    {erroGps.sugestao}
+                  </p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {erroGps.bloqueadoPorIframe &&
+                      typeof window !== 'undefined' && (
+                        <a
+                          href={window.location.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex min-h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-accent)] px-4 text-[14px] font-extrabold text-[var(--rota-on-accent)]"
+                        >
+                          Abrir em nova aba
+                        </a>
+                      )}
+                    {erroGps.podeTentarNovamente && (
+                      <button
+                        type="button"
+                        onClick={handleIniciarOuContinuar}
+                        className="inline-flex min-h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-surface)] px-4 text-[14px] font-extrabold text-[var(--rota-text)]"
+                      >
+                        Tentar novamente
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={
+                    status === 'running'
+                      ? handlePausar
+                      : handleIniciarOuContinuar
+                  }
+                  className={`flex min-h-[48px] flex-1 items-center justify-center rounded-[14px] px-4 text-[15px] font-extrabold active:scale-[0.98] ${
+                    status === 'running'
+                      ? 'bg-[var(--rota-surface-2)] text-[var(--rota-text)]'
+                      : 'bg-[var(--rota-accent)] text-[var(--rota-on-accent)]'
+                  }`}
+                >
+                  {status === 'running'
+                    ? 'Pausar'
+                    : status === 'paused'
+                      ? 'Continuar'
+                      : 'Iniciar'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSalvarTrajetoGps}
+                  disabled={kmAtual <= 0}
+                  className={`flex min-h-[48px] flex-1 items-center justify-center rounded-[14px] px-4 text-[15px] font-extrabold whitespace-nowrap active:scale-[0.98] ${
+                    kmAtual > 0
+                      ? 'bg-[var(--rota-surface-2)] text-[var(--rota-text)]'
+                      : 'bg-[var(--rota-surface-2)] text-[var(--rota-text-soft)] opacity-50 cursor-not-allowed'
+                  }`}
+                >
+                  Encerrar turno
+                </button>
+
+                {status === 'paused' && (kmAtual > 0 || tempoSegundos > 0) && (
+                  <button
+                    type="button"
+                    onClick={handleZerar}
+                    className="flex min-h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-danger-tint)] px-4 text-[14px] font-extrabold text-[var(--rota-danger)] active:scale-[0.98]"
+                  >
+                    Descartar
+                  </button>
+                )}
+              </div>
+
+              {avisoTrajeto && (
+                <p className="text-[13px] font-bold text-[var(--rota-danger)]">
+                  {avisoTrajeto}
+                </p>
+              )}
+
+              {/* Corte de entrega sem parar o odômetro */}
+              {status !== 'idle' && (
+                <div className="pt-2 border-t border-[var(--rota-line)]">
+                  {entregaAtiva ? (
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <span className="block text-[14px] font-extrabold text-[var(--rota-text)]">
+                            Entrega em andamento
+                          </span>
+                          <span className="block text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
+                            {formatarDuracao(tempoEntregaAtual)}
+                          </span>
+                        </div>
+                        <span className="text-[18px] font-extrabold text-[var(--rota-success)] tabular-nums">
+                          {formatarKm(kmEntregaAtual)} km
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleAbrirModalEntrega}
+                          className="flex min-h-[48px] flex-1 items-center justify-center rounded-[14px] bg-[var(--rota-accent)] px-4 text-[14px] font-extrabold text-[var(--rota-on-accent)] active:scale-[0.98]"
+                        >
+                          Finalizar entrega
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCancelarEntrega}
+                          className="flex min-h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-surface-2)] px-4 text-[14px] font-bold text-[var(--rota-text-soft)] active:scale-[0.98]"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleIniciarEntrega}
+                      className="flex min-h-[48px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-accent-tint)] px-4 text-[14px] font-extrabold text-[var(--rota-accent)] active:scale-[0.98]"
+                    >
+                      Iniciar entrega
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Modo manual (Distância ou Painel) */}
+            <form
+              onSubmit={handleAdicionarManual}
+              className="rota-card p-4 space-y-3"
+            >
+              <h3 className="text-[15px] font-extrabold text-[var(--rota-text)]">
+                Lançar km manual
+              </h3>
+
+              <div
+                role="tablist"
+                aria-label="Modo de entrada manual de quilômetros"
+                className="rota-segmented grid-cols-2"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={modoManual === 'distancia'}
+                  onClick={() => {
+                    setModoManual('distancia');
+                    setErroManual(null);
+                  }}
+                  className={`rota-segmented-btn ${
+                    modoManual === 'distancia'
+                      ? 'rota-segmented-btn-active'
+                      : 'rota-segmented-btn-idle'
+                  }`}
+                >
+                  Distância
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={modoManual === 'painel'}
+                  onClick={() => {
+                    setModoManual('painel');
+                    setErroManual(null);
+                  }}
+                  className={`rota-segmented-btn ${
+                    modoManual === 'painel'
+                      ? 'rota-segmented-btn-active'
+                      : 'rota-segmented-btn-idle'
+                  }`}
+                >
+                  Painel
+                </button>
+              </div>
+
+              {modoManual === 'distancia' ? (
+                <div className="flex items-center gap-2">
+                  <div className="rota-input flex h-[48px] flex-1 items-center px-3.5">
+                    <input
+                      id="input-km-manual"
+                      type="text"
+                      inputMode="decimal"
+                      value={kmManualTexto}
+                      onChange={(e) => {
+                        setKmManualTexto(e.target.value);
+                        if (erroManual) setErroManual(null);
+                      }}
+                      placeholder="Ex: 38,5"
+                      className="w-full bg-transparent text-[16px] font-extrabold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
+                    />
+                    <span className="ml-2 text-[13px] font-bold text-[var(--rota-text-soft)]">
+                      km
+                    </span>
+                  </div>
+                  <button
+                    type="submit"
+                    className="flex h-[48px] shrink-0 items-center justify-center rounded-[14px] bg-[var(--rota-accent)] px-4 text-[14px] font-extrabold text-[var(--rota-on-accent)] active:scale-[0.98]"
+                  >
+                    Adicionar
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label
+                        htmlFor="input-km-inicial"
+                        className="mb-1 block text-[13px] font-bold text-[var(--rota-text-soft)]"
+                      >
+                        Km inicial
+                      </label>
+                      <div className="rota-input flex h-[48px] items-center px-3">
+                        <input
+                          id="input-km-inicial"
+                          type="text"
+                          inputMode="decimal"
+                          value={kmInicialTexto}
+                          onChange={(e) => {
+                            setKmInicialTexto(e.target.value);
+                            if (erroManual) setErroManual(null);
+                          }}
+                          placeholder="42150"
+                          className="w-full bg-transparent text-[15px] font-extrabold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="input-km-final"
+                        className="mb-1 block text-[13px] font-bold text-[var(--rota-text-soft)]"
+                      >
+                        Km final
+                      </label>
+                      <div className="rota-input flex h-[48px] items-center px-3">
+                        <input
+                          id="input-km-final"
+                          type="text"
+                          inputMode="decimal"
+                          value={kmFinalTexto}
+                          onChange={(e) => {
+                            setKmFinalTexto(e.target.value);
+                            if (erroManual) setErroManual(null);
+                          }}
+                          placeholder="42238"
+                          className="w-full bg-transparent text-[15px] font-extrabold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[13px] font-bold text-[var(--rota-text-soft)] tabular-nums">
+                      {distanciaPainelValida !== null
+                        ? `Distância: ${formatarKm(distanciaPainelValida)} km`
+                        : 'Informe o painel da moto'}
+                    </span>
+                    <button
+                      type="submit"
+                      className="flex h-[48px] shrink-0 items-center justify-center rounded-[14px] bg-[var(--rota-accent)] px-4 text-[14px] font-extrabold text-[var(--rota-on-accent)] active:scale-[0.98]"
+                    >
+                      Salvar km
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {erroManual && (
+                <p className="text-[13px] font-bold text-[var(--rota-danger)]">
+                  {erroManual}
+                </p>
+              )}
+            </form>
           </div>
         </div>
       )}
 
-      {/* Botões principais do Odômetro */}
-      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-        {status === 'running' ? (
-          <button
-            type="button"
-            onClick={handlePausar}
-            className="neu-btn-secondary flex-1 min-w-[116px] min-h-[40px] flex items-center justify-center gap-1.5 sm:gap-2 rounded-2xl px-3 sm:px-4 text-xs sm:text-sm font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
-          >
-            <Pause className="h-4 w-4 shrink-0 text-[var(--rota-accent)]" strokeWidth={1.75} aria-hidden="true" />
-            Pausar
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={handleIniciarOuContinuar}
-            className="btn-primary-glow flex-1 min-w-[116px] min-h-[40px] flex items-center justify-center gap-1.5 sm:gap-2 rounded-2xl px-3 sm:px-4 text-xs sm:text-sm font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
-          >
-            <Play className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-            {status === 'paused' ? 'Continuar' : 'Iniciar'}
-          </button>
-        )}
-
-        <button
-          type="button"
-          onClick={handleSalvarTrajetoGps}
-          disabled={kmAtual <= 0}
-          className={`min-h-[40px] min-w-[124px] flex-1 flex items-center justify-center gap-1.5 sm:gap-2 rounded-2xl px-3 sm:px-4 text-xs sm:text-sm font-semibold whitespace-nowrap transition-colors duration-150 ${
-            kmAtual > 0
-              ? status === 'running'
-                ? 'btn-primary-glow text-[var(--rota-text)] active:scale-[0.98]'
-                : 'bg-[var(--rota-success-soft)] text-[var(--rota-success)] hover:bg-[var(--rota-success-strong)] active:scale-[0.98]'
-              : 'bg-[var(--rota-surface-2)] text-[var(--rota-text-soft)] cursor-not-allowed'
-          }`}
+      {/* Modal para finalizar entrega sem parar o odômetro */}
+      {modalEntregaAberto && (
+        <div
+          className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4"
+          style={{ backgroundColor: 'var(--rota-backdrop)' }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="titulo-finalizar-entrega"
         >
-          <Save className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-          Salvar trajeto
-        </button>
-
-        {status === 'paused' && (kmAtual > 0 || tempoSegundos > 0) && (
-          <button
-            type="button"
-            onClick={handleZerar}
-            aria-label="Descartar trajeto atual"
-            title="Descartar trajeto atual"
-            className="neu-btn-secondary flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-[var(--rota-text-soft)] hover:text-[var(--rota-danger)] active:scale-[0.98]"
-          >
-            <RotateCcw className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-          </button>
-        )}
-      </div>
-
-      {/* Painel recolhível para modo manual (Distância ou Painel) */}
-      {manualAberto && (
-        <form onSubmit={handleAdicionarManual} className="mt-4 pt-4 border-t border-[var(--rota-line)]">
-          <div
-            role="tablist"
-            aria-label="Modo de entrada manual de quilômetros"
-            className="tab-track grid-cols-2 mb-3"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={modoManual === 'distancia'}
-              onClick={() => {
-                setModoManual('distancia');
-                setErroManual(null);
-              }}
-              className={`tab-item ${
-                modoManual === 'distancia' ? 'tab-item-active' : 'tab-item-idle'
-              }`}
-            >
-              Distância
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={modoManual === 'painel'}
-              onClick={() => {
-                setModoManual('painel');
-                setErroManual(null);
-              }}
-              className={`tab-item ${
-                modoManual === 'painel' ? 'tab-item-active' : 'tab-item-idle'
-              }`}
-            >
-              Painel
-            </button>
-          </div>
-
-          {modoManual === 'distancia' ? (
-            <div className="flex items-center gap-2">
-              <div className="neu-inset flex flex-1 items-center rounded-2xl px-4 min-h-[40px]">
-                <input
-                  id="input-km-manual"
-                  type="text"
-                  inputMode="decimal"
-                  value={kmManualTexto}
-                  onChange={(e) => {
-                    setKmManualTexto(e.target.value);
-                    if (erroManual) setErroManual(null);
-                  }}
-                  placeholder="Ex: 38,5"
-                  className="w-full bg-transparent text-sm font-semibold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
-                />
-                <span className="ml-2 text-xs font-semibold text-[var(--rota-text-soft)]">km</span>
-              </div>
-              <button
-                type="submit"
-                className="btn-primary-glow flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-2xl px-4 text-xs font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
+          <div className="rota-card w-full max-w-[420px] p-5 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h3
+                id="titulo-finalizar-entrega"
+                className="text-[18px] font-extrabold text-[var(--rota-text)]"
               >
-                <Plus className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-                Adicionar
+                Finalizar entrega
+              </h3>
+              <button
+                type="button"
+                onClick={() => setModalEntregaAberto(false)}
+                className="inline-flex min-h-[48px] items-center px-2 text-[14px] font-bold text-[var(--rota-text-soft)]"
+              >
+                Fechar
               </button>
             </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label
-                    htmlFor="input-km-inicial"
-                    className="block text-xs font-medium text-[var(--rota-text-soft)] mb-1.5"
-                  >
-                    Km inicial
-                  </label>
-                  <div className="neu-inset flex items-center rounded-2xl px-3.5 min-h-[40px]">
-                    <input
-                      id="input-km-inicial"
-                      type="text"
-                      inputMode="decimal"
-                      value={kmInicialTexto}
-                      onChange={(e) => {
-                        setKmInicialTexto(e.target.value);
-                        if (erroManual) setErroManual(null);
-                      }}
-                      placeholder="Ex: 42150"
-                      className="w-full bg-transparent text-sm font-semibold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
-                    />
-                  </div>
-                </div>
 
-                <div>
-                  <label
-                    htmlFor="input-km-final"
-                    className="block text-xs font-medium text-[var(--rota-text-soft)] mb-1.5"
-                  >
-                    Km final
-                  </label>
-                  <div className="neu-inset flex items-center rounded-2xl px-3.5 min-h-[40px]">
-                    <input
-                      id="input-km-final"
-                      type="text"
-                      inputMode="decimal"
-                      value={kmFinalTexto}
-                      onChange={(e) => {
-                        setKmFinalTexto(e.target.value);
-                        if (erroManual) setErroManual(null);
-                      }}
-                      placeholder="Ex: 42238"
-                      className="w-full bg-transparent text-sm font-semibold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-[var(--rota-text-soft)] tabular-nums">
-                  {distanciaPainelValida !== null ? (
-                    <>
-                      Distância:{' '}
-                      <strong className="font-semibold text-[var(--rota-accent)]">
-                        {formatarKm(distanciaPainelValida)} km
-                      </strong>
-                    </>
-                  ) : (
-                    'Informe o hodômetro da moto'
-                  )}
-                </span>
-
-                <button
-                  type="submit"
-                  className="btn-primary-glow flex min-h-[44px] items-center justify-center gap-1.5 rounded-2xl px-4 text-xs font-semibold text-[var(--rota-text)] whitespace-nowrap shrink-0 active:scale-[0.98]"
-                >
-                  <Plus className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-                  Salvar km
-                </button>
-              </div>
+            <div className="flex items-center justify-between rounded-[14px] bg-[var(--rota-surface-2)] px-4 py-3 tabular-nums">
+              <span className="text-[14px] font-extrabold text-[var(--rota-text)]">
+                {formatarKm(kmEntregaAtual)} km
+              </span>
+              <span className="text-[13px] font-bold text-[var(--rota-text-soft)]">
+                {formatarDuracao(tempoEntregaAtual)}
+              </span>
             </div>
-          )}
 
-          {erroManual && (
-            <p className="mt-2 text-xs text-[var(--rota-danger)]">{erroManual}</p>
-          )}
-        </form>
+            <form onSubmit={handleConfirmarEntrega} className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                {plataformasOrdenadas.map((plat) => {
+                  const ativo = entregaPlataforma === plat;
+                  return (
+                    <button
+                      key={plat}
+                      type="button"
+                      aria-pressed={ativo}
+                      onClick={() => setEntregaPlataforma(plat)}
+                      className={`h-[48px] rounded-[14px] border-2 px-3 text-[14px] font-extrabold truncate transition-colors ${
+                        ativo
+                          ? 'bg-[var(--rota-accent-tint)] border-[var(--rota-accent)] text-[var(--rota-accent)]'
+                          : 'bg-[var(--rota-surface-2)] border-transparent text-[var(--rota-text)]'
+                      }`}
+                    >
+                      {rotuloCategoria(plat)}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="input-valor-entrega-odometro"
+                  className="mb-1 block text-[13px] font-bold text-[var(--rota-text-soft)]"
+                >
+                  Valor da entrega
+                </label>
+                <div className="rota-input flex h-[52px] items-center px-3.5">
+                  <span className="mr-2 text-[16px] font-extrabold text-[var(--rota-text-soft)]">
+                    R$
+                  </span>
+                  <input
+                    id="input-valor-entrega-odometro"
+                    type="text"
+                    inputMode="decimal"
+                    autoFocus
+                    value={entregaValorTexto}
+                    onChange={(e) => {
+                      setEntregaValorTexto(e.target.value);
+                      if (erroEntrega) setErroEntrega(null);
+                    }}
+                    placeholder="0,00"
+                    className="w-full bg-transparent text-[20px] font-extrabold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/50 focus:outline-none tabular-nums"
+                  />
+                </div>
+                {erroEntrega && (
+                  <p className="mt-1.5 text-[13px] font-bold text-[var(--rota-danger)]">
+                    {erroEntrega}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="input-obs-entrega-odometro"
+                  className="mb-1 block text-[13px] font-bold text-[var(--rota-text-soft)]"
+                >
+                  Observação (opcional)
+                </label>
+                <div className="rota-input flex h-[48px] items-center px-3.5">
+                  <input
+                    id="input-obs-entrega-odometro"
+                    type="text"
+                    maxLength={80}
+                    value={entregaObs}
+                    onChange={(e) => setEntregaObs(e.target.value)}
+                    placeholder="Ex: gorjeta, taxa extra"
+                    className="w-full bg-transparent text-[14px] font-semibold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="flex h-[56px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-accent)] text-[15px] font-extrabold text-[var(--rota-on-accent)] active:scale-[0.98]"
+              >
+                Salvar entrega
+              </button>
+            </form>
+          </div>
+        </div>
       )}
-    </section>
+    </>
   );
 };

@@ -1,30 +1,36 @@
-import React, { useMemo, useRef, useState } from 'react';
-import {
-  Download,
-  FileSpreadsheet,
-  Upload,
-  Wrench,
-} from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Lancamento, Trajeto } from '../types';
 import { formatarKm, parseValorNumerico } from '../utils/formatters';
 import {
   BackupRota,
   ConfigTrocaOleo,
+  PreferenciaTema,
   carregarConfigOleo,
   gerarConteudoCsv,
   salvarConfigOleo,
   validarEConverterBackupJson,
 } from '../utils/storage';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface ManutencaoBackupProps {
+  tema: PreferenciaTema;
+  onMudarTema: (tema: PreferenciaTema) => void;
   todosLancamentos: Lancamento[];
   todosTrajetos: Trajeto[];
   metaDiaria: number;
+  onMudarMetaDiaria: (meta: number) => void;
+  minLucroKm: number;
+  onMudarMinLucroKm: (valor: number) => void;
+  percentualReserva: number;
+  configOleoExterna?: ConfigTrocaOleo;
+  onMudarConfigOleo?: (config: ConfigTrocaOleo) => void;
   onRestaurarBackup: (
     lancamentos: Lancamento[],
     trajetos: Trajeto[],
     metaDiaria: number,
-    configOleo?: ConfigTrocaOleo
+    configOleo?: ConfigTrocaOleo,
+    percentualReserva?: number,
+    minLucroKm?: number
   ) => void;
 }
 
@@ -40,23 +46,109 @@ function baixarArquivo(conteudo: string, nomeArquivo: string, mime: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+const OPCOES_TEMA: { valor: PreferenciaTema; rotulo: string }[] = [
+  { valor: 'auto', rotulo: 'Automático' },
+  { valor: 'claro', rotulo: 'Claro' },
+  { valor: 'escuro', rotulo: 'Escuro' },
+];
+
 export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
+  tema,
+  onMudarTema,
   todosLancamentos,
   todosTrajetos,
   metaDiaria,
+  onMudarMetaDiaria,
+  minLucroKm,
+  onMudarMinLucroKm,
+  percentualReserva,
+  configOleoExterna,
+  onMudarConfigOleo,
   onRestaurarBackup,
 }) => {
-  const [configOleo, setConfigOleo] = useState<ConfigTrocaOleo>(() =>
-    carregarConfigOleo()
+  const [configOleoInterna, setConfigOleoInterna] = useState<ConfigTrocaOleo>(
+    () => configOleoExterna ?? carregarConfigOleo()
+  );
+  const configOleo = configOleoExterna ?? configOleoInterna;
+
+  const [metaTexto, setMetaTexto] = useState<string>(() =>
+    metaDiaria > 0 ? metaDiaria.toFixed(2).replace('.', ',') : ''
+  );
+  const [minLucroTexto, setMinLucroTexto] = useState<string>(() =>
+    minLucroKm > 0 ? minLucroKm.toFixed(2).replace('.', ',') : ''
   );
   const [intervaloOleoTexto, setIntervaloOleoTexto] = useState<string>(() =>
-    String(carregarConfigOleo().intervaloKm)
+    String(configOleo.intervaloKm)
   );
   const [mensagemBackup, setMensagemBackup] = useState<{
     texto: string;
     erro?: boolean;
   } | null>(null);
   const inputRestoreRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setIntervaloOleoTexto(String(configOleo.intervaloKm));
+  }, [configOleo.intervaloKm]);
+
+  useEffect(() => {
+    const parsed = parseValorNumerico(metaTexto);
+    if (metaDiaria <= 0 && metaTexto.trim() !== '') {
+      setMetaTexto('');
+    } else if (
+      metaDiaria > 0 &&
+      (Number.isNaN(parsed) || Math.abs(parsed - metaDiaria) > 0.009)
+    ) {
+      setMetaTexto(metaDiaria.toFixed(2).replace('.', ','));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metaDiaria]);
+
+  useEffect(() => {
+    const parsed = parseValorNumerico(minLucroTexto);
+    if (minLucroKm <= 0 && minLucroTexto.trim() !== '') {
+      setMinLucroTexto('');
+    } else if (
+      minLucroKm > 0 &&
+      (Number.isNaN(parsed) || Math.abs(parsed - minLucroKm) > 0.009)
+    ) {
+      setMinLucroTexto(minLucroKm.toFixed(2).replace('.', ','));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [minLucroKm]);
+
+  const handleMetaChange = (valorDigitado: string) => {
+    setMetaTexto(valorDigitado);
+    if (!valorDigitado.trim()) {
+      onMudarMetaDiaria(0);
+      return;
+    }
+    const parsed = parseValorNumerico(valorDigitado);
+    if (!Number.isNaN(parsed) && parsed > 0) {
+      onMudarMetaDiaria(Number(parsed.toFixed(2)));
+    }
+  };
+
+  const handleMinLucroChange = (valorDigitado: string) => {
+    setMinLucroTexto(valorDigitado);
+    const limpo = valorDigitado.trim().replace(',', '.');
+    if (limpo === '' || Number(limpo) === 0) {
+      onMudarMinLucroKm(0);
+      return;
+    }
+    const parsed = parseValorNumerico(valorDigitado);
+    if (!Number.isNaN(parsed) && parsed >= 0) {
+      onMudarMinLucroKm(Number(parsed.toFixed(2)));
+    }
+  };
+
+  const atualizarConfigOleo = (atualizado: ConfigTrocaOleo) => {
+    if (onMudarConfigOleo) {
+      onMudarConfigOleo(atualizado);
+    } else {
+      setConfigOleoInterna(atualizado);
+      salvarConfigOleo(atualizado);
+    }
+  };
 
   const exibirMensagemBackup = (texto: string, erro = false) => {
     setMensagemBackup({ texto, erro });
@@ -74,23 +166,19 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
     setIntervaloOleoTexto(valorDigitado);
     const parsed = parseValorNumerico(valorDigitado);
     if (!Number.isNaN(parsed) && parsed >= 100) {
-      const atualizado: ConfigTrocaOleo = {
+      atualizarConfigOleo({
         ...configOleo,
         intervaloKm: Math.round(parsed),
-      };
-      setConfigOleo(atualizado);
-      salvarConfigOleo(atualizado);
+      });
     }
   };
 
   const handleRegistrarTrocaOleo = () => {
-    const atualizado: ConfigTrocaOleo = {
+    atualizarConfigOleo({
       ...configOleo,
       kmBase: Number(totalKmHistorico.toFixed(2)),
       ultimaTrocaData: new Date().toISOString(),
-    };
-    setConfigOleo(atualizado);
-    salvarConfigOleo(atualizado);
+    });
   };
 
   const kmDesdeTrocaOleo = Math.max(0, totalKmHistorico - configOleo.kmBase);
@@ -103,7 +191,6 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
       ? Math.min(100, (kmDesdeTrocaOleo / configOleo.intervaloKm) * 100)
       : 0;
   const oleoVencido = kmDesdeTrocaOleo >= configOleo.intervaloKm;
-  const oleoProximo = !oleoVencido && progressoOleo >= 80;
 
   const handleExportarCsv = () => {
     if (todosLancamentos.length === 0 && todosTrajetos.length === 0) {
@@ -126,6 +213,8 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
       versao: 1,
       exportadoEm: new Date().toISOString(),
       metaDiaria,
+      minLucroKm,
+      percentualReserva,
       configOleo,
       lancamentos: todosLancamentos,
       trajetos: todosTrajetos,
@@ -157,13 +246,14 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
         backup.lancamentos,
         backup.trajetos,
         backup.metaDiaria,
-        backup.configOleo
+        backup.configOleo,
+        backup.percentualReserva,
+        backup.minLucroKm
       );
 
       if (backup.configOleo) {
-        setConfigOleo(backup.configOleo);
+        atualizarConfigOleo(backup.configOleo);
         setIntervaloOleoTexto(String(backup.configOleo.intervaloKm));
-        salvarConfigOleo(backup.configOleo);
       }
 
       exibirMensagemBackup('Dados restaurados com sucesso!');
@@ -173,44 +263,114 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
   };
 
   return (
-    <section aria-labelledby="titulo-manutencao-backup" className="neu-card p-4 sm:p-6">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="icon-tile text-[var(--rota-accent)]">
-            <Wrench
-              className="h-[18px] w-[18px]"
-              strokeWidth={1.75}
-              aria-hidden="true"
+    <div className="space-y-3">
+      {/* Aparência */}
+      <section aria-labelledby="titulo-aparencia" className="rota-card p-3.5">
+        <h3
+          id="titulo-aparencia"
+          className="mb-2.5 text-[15px] font-extrabold text-[var(--rota-text)]"
+        >
+          Aparência
+        </h3>
+        <div
+          role="tablist"
+          aria-label="Tema do aplicativo"
+          className="rota-segmented grid-cols-3"
+        >
+          {OPCOES_TEMA.map((opcao) => {
+            const ativo = tema === opcao.valor;
+            return (
+              <button
+                key={opcao.valor}
+                type="button"
+                role="tab"
+                aria-selected={ativo}
+                onClick={() => onMudarTema(opcao.valor)}
+                className={`rota-segmented-btn ${
+                  ativo
+                    ? 'rota-segmented-btn-active'
+                    : 'rota-segmented-btn-idle'
+                }`}
+              >
+                {opcao.rotulo}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Meta diária */}
+      <section aria-labelledby="titulo-meta-diaria" className="rota-card p-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <label
+            id="titulo-meta-diaria"
+            htmlFor="input-meta-diaria"
+            className="text-[15px] font-extrabold text-[var(--rota-text)]"
+          >
+            Meta diária
+          </label>
+          <div className="rota-input flex h-[48px] w-[144px] shrink-0 items-center px-3">
+            <span className="mr-1.5 text-[14px] font-bold text-[var(--rota-text-soft)]">
+              R$
+            </span>
+            <input
+              id="input-meta-diaria"
+              type="text"
+              inputMode="decimal"
+              value={metaTexto}
+              onChange={(e) => handleMetaChange(e.target.value)}
+              placeholder="200,00"
+              className="w-full bg-transparent text-right text-[16px] font-extrabold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
             />
           </div>
-          <div className="min-w-0">
-            <h2 id="titulo-manutencao-backup" className="card-title">
-              Manutenção e dados
-            </h2>
-            <p className="text-xs font-medium text-[var(--rota-text-soft)] truncate">
-              Troca de óleo e cópia de segurança
-            </p>
+        </div>
+      </section>
+
+      {/* Lucro mínimo por km */}
+      <section aria-labelledby="titulo-min-lucro-km" className="rota-card p-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <label
+            id="titulo-min-lucro-km"
+            htmlFor="input-min-lucro-km"
+            className="text-[15px] font-extrabold text-[var(--rota-text)]"
+          >
+            Lucro mínimo por km
+          </label>
+          <div className="rota-input flex h-[48px] w-[144px] shrink-0 items-center px-3">
+            <span className="mr-1.5 text-[14px] font-bold text-[var(--rota-text-soft)]">
+              R$
+            </span>
+            <input
+              id="input-min-lucro-km"
+              type="text"
+              inputMode="decimal"
+              value={minLucroTexto}
+              onChange={(e) => handleMinLucroChange(e.target.value)}
+              placeholder="0,00"
+              className="w-full bg-transparent text-right text-[16px] font-extrabold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
+            />
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Controle de manutenção: Troca de óleo */}
-      <div>
-        <div className="flex items-center justify-between gap-2 mb-2">
+      {/* Troca de óleo */}
+      <section aria-labelledby="titulo-troca-oleo" className="rota-card p-3.5">
+        <div className="mb-2 flex items-center justify-between gap-2">
           <label
+            id="titulo-troca-oleo"
             htmlFor="input-intervalo-oleo"
-            className="section-subtitle"
+            className="text-[15px] font-extrabold text-[var(--rota-text)]"
           >
             Troca de óleo
           </label>
-          <span className="text-xs font-medium text-[var(--rota-text-soft)] tabular-nums">
+          <span className="text-[13px] font-bold text-[var(--rota-text-soft)] tabular-nums">
             {formatarKm(kmDesdeTrocaOleo)} / {configOleo.intervaloKm} km
           </span>
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="neu-inset flex flex-1 items-center rounded-2xl px-4 min-h-[48px]">
-            <span className="mr-2 text-xs font-medium text-[var(--rota-text-soft)] whitespace-nowrap">
+          <div className="rota-input flex h-[48px] flex-1 items-center px-3">
+            <span className="mr-1.5 text-[13px] font-bold text-[var(--rota-text-soft)] whitespace-nowrap">
               A cada
             </span>
             <input
@@ -220,72 +380,69 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
               value={intervaloOleoTexto}
               onChange={(e) => handleIntervaloOleoChange(e.target.value)}
               placeholder="1000"
-              className="w-full bg-transparent text-sm font-semibold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
+              className="w-full bg-transparent text-[15px] font-extrabold text-[var(--rota-text)] focus:outline-none tabular-nums"
             />
-            <span className="ml-2 text-xs font-semibold text-[var(--rota-text-soft)]">km</span>
+            <span className="ml-1 text-[13px] font-bold text-[var(--rota-text-soft)]">
+              km
+            </span>
           </div>
 
           <button
             type="button"
             onClick={handleRegistrarTrocaOleo}
-            className="neu-btn-secondary min-h-[48px] shrink-0 rounded-2xl px-4 text-xs font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
+            className="inline-flex h-[48px] shrink-0 items-center justify-center rounded-[14px] bg-[var(--rota-surface-2)] px-4 text-[14px] font-extrabold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
           >
             Troquei agora
           </button>
         </div>
 
-        <div className="mt-3">
+        <div className="mt-2.5">
           <div
             role="progressbar"
             aria-label="Progresso até a próxima troca de óleo"
             aria-valuemin={0}
             aria-valuemax={configOleo.intervaloKm}
             aria-valuenow={Math.min(kmDesdeTrocaOleo, configOleo.intervaloKm)}
-            className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--rota-track)]"
+            className="h-2 w-full overflow-hidden rounded-full bg-[var(--rota-surface-2)]"
           >
             <div
-              className={`h-full rounded-full transition-all duration-300 ${
-                oleoVencido
-                  ? 'bg-[var(--rota-danger)]'
-                  : oleoProximo
-                    ? 'bg-[var(--rota-warn)]'
-                    : 'bg-[var(--rota-accent)]'
-              }`}
-              style={{ width: `${progressoOleo}%` }}
+              className="h-full rounded-full transition-all duration-300"
+              style={{
+                width: `${progressoOleo}%`,
+                backgroundColor: oleoVencido
+                  ? 'var(--rota-danger)'
+                  : 'var(--rota-accent)',
+              }}
             />
           </div>
-
-          <p className="mt-2 text-xs tabular-nums">
+          <p className="mt-1.5 text-[13px] font-semibold tabular-nums">
             {oleoVencido ? (
-              <span className="font-semibold text-[var(--rota-danger)]">
-                Troca de óleo recomendada agora (
-                {formatarKm(kmDesdeTrocaOleo - configOleo.intervaloKm)} km acima)
-              </span>
-            ) : oleoProximo ? (
-              <span className="font-semibold text-[var(--rota-warn)]">
-                Atenção: faltam {formatarKm(faltaParaTrocaOleo)} km para trocar o
-                óleo
+              <span className="text-[var(--rota-danger)]">
+                Troca recomendada agora (
+                {formatarKm(kmDesdeTrocaOleo - configOleo.intervaloKm)} km
+                acima)
               </span>
             ) : (
               <span className="text-[var(--rota-text-soft)]">
-                Faltam{' '}
-                <strong className="font-semibold text-[var(--rota-text)]">
-                  {formatarKm(faltaParaTrocaOleo)} km
-                </strong>{' '}
-                para a próxima troca.
+                Faltam {formatarKm(faltaParaTrocaOleo)} km para a próxima troca
               </span>
             )}
           </p>
         </div>
-      </div>
+      </section>
 
-      {/* Exportar planilha CSV e Backup JSON */}
-      <div className="mt-4 pt-4 border-t border-[var(--rota-line)]">
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <h3 className="section-subtitle">Planilha e backup</h3>
+      {/* Backup JSON e CSV */}
+      <section aria-labelledby="titulo-planilha-backup" className="rota-card p-3.5">
+        <div className="mb-2.5 flex items-center justify-between gap-2">
+          <h3
+            id="titulo-planilha-backup"
+            className="text-[15px] font-extrabold text-[var(--rota-text)]"
+          >
+            Backup e planilha
+          </h3>
           {mensagemBackup && (
             <span
-              className={`text-xs font-semibold ${
+              className={`text-[13px] font-bold ${
                 mensagemBackup.erro
                   ? 'text-[var(--rota-danger)]'
                   : 'text-[var(--rota-success)]'
@@ -296,44 +453,27 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
           )}
         </div>
 
-        <div className="grid grid-cols-1 min-[350px]:grid-cols-3 gap-2">
-          <button
-            type="button"
-            onClick={handleExportarCsv}
-            className="neu-btn-secondary min-h-[44px] flex items-center justify-center gap-1.5 rounded-2xl px-2 sm:px-3 text-xs font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
-          >
-            <FileSpreadsheet
-              className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 text-[var(--rota-success)]"
-              strokeWidth={1.75}
-              aria-hidden="true"
-            />
-            CSV
-          </button>
-
+        <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
             onClick={handleSalvarBackup}
-            className="neu-btn-secondary min-h-[44px] flex items-center justify-center gap-1.5 rounded-2xl px-2 sm:px-3 text-xs font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
+            className="flex h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-surface-2)] px-2 text-[14px] font-extrabold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
           >
-            <Download
-              className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 text-[var(--rota-accent)]"
-              strokeWidth={1.75}
-              aria-hidden="true"
-            />
-            Backup
+            Salvar
           </button>
-
           <button
             type="button"
             onClick={() => inputRestoreRef.current?.click()}
-            className="neu-btn-secondary min-h-[44px] flex items-center justify-center gap-1.5 rounded-2xl px-2 sm:px-3 text-xs font-semibold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
+            className="flex h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-surface-2)] px-2 text-[14px] font-extrabold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
           >
-            <Upload
-              className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 text-[var(--rota-accent)]"
-              strokeWidth={1.75}
-              aria-hidden="true"
-            />
             Restaurar
+          </button>
+          <button
+            type="button"
+            onClick={handleExportarCsv}
+            className="flex h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-surface-2)] px-2 text-[14px] font-extrabold text-[var(--rota-text)] whitespace-nowrap active:scale-[0.98]"
+          >
+            CSV
           </button>
         </div>
 
@@ -345,7 +485,9 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
           className="hidden"
           aria-label="Selecionar arquivo de backup JSON"
         />
-      </div>
-    </section>
+      </section>
+
+      <PWAInstallButton />
+    </div>
   );
 };

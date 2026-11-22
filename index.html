@@ -15,15 +15,45 @@
     />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="theme-color" content="#0E131D" />
+    <meta name="theme-color" content="#F6F7F9" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Rota" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <script>
+      (function () {
+        try {
+          var pref = localStorage.getItem('rota_tema_v1');
+          var prefersDark =
+            window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var resolved =
+            pref === 'escuro'
+              ? 'dark'
+              : pref === 'claro'
+                ? 'light'
+                : prefersDark
+                  ? 'dark'
+                  : 'light';
+          if (pref === 'claro' || pref === 'escuro') {
+            document.documentElement.setAttribute('data-theme', resolved);
+          } else {
+            document.documentElement.removeAttribute('data-theme');
+          }
+          var metaTheme = document.querySelector('meta[name="theme-color"]');
+          if (metaTheme) {
+            metaTheme.setAttribute(
+              'content',
+              resolved === 'dark' ? '#0B0F17' : '#F6F7F9'
+            );
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body class="bg-[var(--rota-bg)] text-[var(--rota-text)] antialiased selection:bg-[var(--rota-accent-tint)] selection:text-[var(--rota-text)]">
+  <body class="antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

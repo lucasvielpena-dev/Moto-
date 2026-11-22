@@ -1,18 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  Fuel,
-  Navigation,
-  Pencil,
-  Receipt,
-  Trash2,
-  TrendingUp,
-  Utensils,
-  Wrench,
-  X,
-} from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import {
   CATEGORIAS_GASTO,
   CategoriaGasto,
@@ -30,7 +17,6 @@ import {
   formatarMoeda,
   parseValorNumerico,
   rotuloCategoria,
-  rotuloPeriodo,
 } from '../utils/formatters';
 
 interface ListaLancamentosProps {
@@ -49,53 +35,7 @@ const OPCOES_PERIODO: { valor: FiltroPeriodo; rotulo: string }[] = [
   { valor: FiltroPeriodo.MES, rotulo: 'Mês' },
 ];
 
-const LIMITE_INICIAL = 8;
-
-function renderizarIconeLancamento(item: Lancamento) {
-  if (item.tipo === TipoLancamento.GANHO) {
-    return (
-      <TrendingUp
-        className="h-[18px] w-[18px]"
-        strokeWidth={1.75}
-        aria-hidden="true"
-      />
-    );
-  }
-  switch (item.categoria) {
-    case CategoriaGasto.COMBUSTIVEL:
-      return (
-        <Fuel
-          className="h-[18px] w-[18px]"
-          strokeWidth={1.75}
-          aria-hidden="true"
-        />
-      );
-    case CategoriaGasto.MANUTENCAO:
-      return (
-        <Wrench
-          className="h-[18px] w-[18px]"
-          strokeWidth={1.75}
-          aria-hidden="true"
-        />
-      );
-    case CategoriaGasto.ALIMENTACAO:
-      return (
-        <Utensils
-          className="h-[18px] w-[18px]"
-          strokeWidth={1.75}
-          aria-hidden="true"
-        />
-      );
-    default:
-      return (
-        <Receipt
-          className="h-[18px] w-[18px]"
-          strokeWidth={1.75}
-          aria-hidden="true"
-        />
-      );
-  }
-}
+const LIMITE_INICIAL = 6;
 
 export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
   periodo,
@@ -147,6 +87,12 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
       categoria: editCategoria,
       valor: Number(valor.toFixed(2)),
       observacao: editObs.trim() || undefined,
+      kmEntrega:
+        editTipo === TipoLancamento.GANHO ? itemEditando.kmEntrega : undefined,
+      duracaoEntregaSegundos:
+        editTipo === TipoLancamento.GANHO
+          ? itemEditando.duracaoEntregaSegundos
+          : undefined,
     });
     setItemEditando(null);
   };
@@ -173,32 +119,12 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
       : trajetosOrdenados.length;
 
   return (
-    <section aria-labelledby="titulo-lista" className="neu-card p-4 sm:p-6">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="icon-tile text-[var(--rota-accent)]">
-            <Clock
-              className="h-[18px] w-[18px]"
-              strokeWidth={1.75}
-              aria-hidden="true"
-            />
-          </div>
-          <div className="min-w-0">
-            <h2 id="titulo-lista" className="card-title">
-              Histórico
-            </h2>
-            <p className="text-xs font-medium text-[var(--rota-text-soft)] truncate">
-              Período: {rotuloPeriodo(periodo)}
-            </p>
-          </div>
-        </div>
-      </div>
-
+    <div className="space-y-3">
       {/* Filtro Hoje / 7 dias / Mês */}
       <div
         role="tablist"
         aria-label="Filtrar histórico por período"
-        className="tab-track grid-cols-3 mb-3"
+        className="rota-segmented grid-cols-3"
       >
         {OPCOES_PERIODO.map((opcao) => {
           const ativo = periodo === opcao.valor;
@@ -209,7 +135,11 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
               role="tab"
               aria-selected={ativo}
               onClick={() => onMudarPeriodo(opcao.valor)}
-              className={`tab-item ${ativo ? 'tab-item-active' : 'tab-item-idle'}`}
+              className={`rota-segmented-btn ${
+                ativo
+                  ? 'rota-segmented-btn-active'
+                  : 'rota-segmented-btn-idle'
+              }`}
             >
               {opcao.rotulo}
             </button>
@@ -217,19 +147,21 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
         })}
       </div>
 
-      {/* Alternador entre Lançamentos e Trajetos */}
+      {/* Alternador Lançamentos | Trajetos */}
       <div
         role="tablist"
         aria-label="Alternar entre lançamentos e trajetos"
-        className="tab-track grid-cols-2 mb-4"
+        className="rota-segmented grid-cols-2"
       >
         <button
           type="button"
           role="tab"
           aria-selected={aba === 'lancamentos'}
           onClick={() => setAba('lancamentos')}
-          className={`tab-item ${
-            aba === 'lancamentos' ? 'tab-item-active' : 'tab-item-idle'
+          className={`rota-segmented-btn ${
+            aba === 'lancamentos'
+              ? 'rota-segmented-btn-active'
+              : 'rota-segmented-btn-idle'
           }`}
         >
           Lançamentos ({lancamentosOrdenados.length})
@@ -239,192 +171,158 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
           role="tab"
           aria-selected={aba === 'trajetos'}
           onClick={() => setAba('trajetos')}
-          className={`tab-item ${
-            aba === 'trajetos' ? 'tab-item-active' : 'tab-item-idle'
+          className={`rota-segmented-btn ${
+            aba === 'trajetos'
+              ? 'rota-segmented-btn-active'
+              : 'rota-segmented-btn-idle'
           }`}
         >
           Trajetos ({trajetosOrdenados.length})
         </button>
       </div>
 
-      {aba === 'lancamentos' ? (
-        lancamentosOrdenados.length === 0 ? (
-          <div className="neu-inset rounded-2xl px-4 py-6 text-center text-xs text-[var(--rota-text-soft)]">
-            Nenhum ganho ou gasto registrado neste período.
-          </div>
-        ) : (
-          <ul className="divide-y divide-[var(--rota-line)]">
-            {lancamentosVisiveis.map((item) => {
-              const ehGanho = item.tipo === TipoLancamento.GANHO;
-              const nomeCategoria = rotuloCategoria(item.categoria);
-              return (
-                <li
-                  key={item.id}
-                  className="flex items-start sm:items-center justify-between gap-2.5 py-3 first:pt-1 last:pb-1"
-                >
-                  <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
-                    <div
-                      className={`icon-tile mt-0.5 sm:mt-0 ${
-                        ehGanho ? 'text-[var(--rota-success)]' : 'text-[var(--rota-danger)]'
-                      }`}
-                    >
-                      {renderizarIconeLancamento(item)}
-                    </div>
+      {/* Lista em cartão único sem cartões aninhados */}
+      <div className="rota-card overflow-hidden">
+        {aba === 'lancamentos' ? (
+          lancamentosOrdenados.length === 0 ? (
+            <p className="px-4 py-6 text-center text-[14px] font-semibold text-[var(--rota-text-soft)]">
+              Nenhum ganho ou gasto registrado neste período.
+            </p>
+          ) : (
+            <ul className="divide-y divide-[var(--rota-line)]">
+              {lancamentosVisiveis.map((item) => {
+                const ehGanho = item.tipo === TipoLancamento.GANHO;
+                const nomeCategoria = rotuloCategoria(item.categoria);
+                return (
+                  <li
+                    key={item.id}
+                    className="flex min-h-[56px] items-center justify-between gap-2 px-4 py-2"
+                  >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-[var(--rota-text)] truncate">
+                      <p className="truncate text-[15px] font-bold text-[var(--rota-text)]">
                         {nomeCategoria}
                       </p>
-                      <p className="text-xs text-[var(--rota-text-soft)] truncate">
-                        {formatarDataHora(item.data)} ·{' '}
-                        {ehGanho ? 'Ganho' : 'Gasto'}
+                      <p className="truncate text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
+                        {formatarDataHora(item.data)}
+                        {typeof item.kmEntrega === 'number' &&
+                        item.kmEntrega > 0
+                          ? ` · ${formatarKm(item.kmEntrega)} km`
+                          : ''}
+                        {item.observacao ? ` · ${item.observacao}` : ''}
                       </p>
-                      {item.observacao && (
-                        <p className="text-xs text-[var(--rota-text)]/85 truncate mt-0.5">
-                          {item.observacao}
-                        </p>
-                      )}
                     </div>
-                  </div>
 
-                  <div className="flex flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-2 shrink-0">
-                    <span
-                      className={`text-sm font-bold tabular-nums whitespace-nowrap ${
-                        ehGanho ? 'text-[var(--rota-success)]' : 'text-[var(--rota-danger)]'
-                      }`}
-                    >
-                      {ehGanho ? '+ ' : '- '}
-                      {formatarMoeda(item.valor)}
-                    </span>
-                    <div className="flex items-center gap-1.5">
+                    <div className="-mr-2 flex shrink-0 items-center">
+                      <span
+                        className={`mr-1 text-[15px] font-extrabold tabular-nums whitespace-nowrap ${
+                          ehGanho
+                            ? 'text-[var(--rota-success)]'
+                            : 'text-[var(--rota-danger)]'
+                        }`}
+                      >
+                        {ehGanho ? '+' : '−'} {formatarMoeda(item.valor)}
+                      </span>
                       <button
                         type="button"
                         onClick={() => abrirEdicao(item)}
                         aria-label={`Editar ${nomeCategoria} de ${formatarMoeda(item.valor)}`}
-                        className="neu-btn-secondary flex h-11 w-11 items-center justify-center rounded-2xl text-[var(--rota-text-soft)] hover:text-[var(--rota-text)] active:scale-[0.98]"
+                        className="flex h-[48px] w-[48px] items-center justify-center rounded-[12px] text-[var(--rota-text-soft)] hover:bg-[var(--rota-surface-2)] hover:text-[var(--rota-text)] active:scale-[0.98]"
                       >
-                        <Pencil
-                          className="h-4 w-4"
-                          strokeWidth={1.75}
-                          aria-hidden="true"
-                        />
+                        <Pencil className="h-4 w-4 shrink-0" aria-hidden="true" />
                       </button>
                       <button
                         type="button"
                         onClick={() => onExcluirLancamento(item.id)}
                         aria-label={`Excluir ${nomeCategoria} de ${formatarMoeda(item.valor)}`}
-                        className="neu-btn-secondary flex h-11 w-11 items-center justify-center rounded-2xl text-[var(--rota-text-soft)] hover:text-[var(--rota-danger)] active:scale-[0.98]"
+                        className="flex h-[48px] w-[48px] items-center justify-center rounded-[12px] text-[var(--rota-text-soft)] hover:bg-[var(--rota-danger-tint)] hover:text-[var(--rota-danger)] active:scale-[0.98]"
                       >
-                        <Trash2
-                          className="h-4 w-4"
-                          strokeWidth={1.75}
-                          aria-hidden="true"
-                        />
+                        <Trash2 className="h-4 w-4 shrink-0" aria-hidden="true" />
                       </button>
                     </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )
-      ) : trajetosOrdenados.length === 0 ? (
-        <div className="neu-inset rounded-2xl px-4 py-6 text-center text-xs text-[var(--rota-text-soft)]">
-          Nenhum trajeto salvo neste período.
-        </div>
-      ) : (
-        <ul className="divide-y divide-[var(--rota-line)]">
-          {trajetosVisiveis.map((trajeto) => (
-            <li
-              key={trajeto.id}
-              className="flex items-center justify-between gap-3 py-3 first:pt-1 last:pb-1"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="icon-tile text-[var(--rota-accent)]">
-                  <Navigation
-                    className="h-[18px] w-[18px]"
-                    strokeWidth={1.75}
-                    aria-hidden="true"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[var(--rota-text)] tabular-nums">
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        ) : trajetosOrdenados.length === 0 ? (
+          <p className="px-4 py-6 text-center text-[14px] font-semibold text-[var(--rota-text-soft)]">
+            Nenhum trajeto salvo neste período.
+          </p>
+        ) : (
+          <ul className="divide-y divide-[var(--rota-line)]">
+            {trajetosVisiveis.map((trajeto) => (
+              <li
+                key={trajeto.id}
+                className="flex min-h-[56px] items-center justify-between gap-2 px-4 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-extrabold text-[var(--rota-text)] tabular-nums">
                     {formatarKm(trajeto.km)} km
                   </p>
-                  <p className="text-xs text-[var(--rota-text-soft)] truncate tabular-nums">
+                  <p className="truncate text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
                     {formatarDataHora(trajeto.data)} ·{' '}
-                    {trajeto.origem === 'gps' ? 'GPS automático' : 'Manual'}
+                    {trajeto.origem === 'gps' ? 'GPS' : 'Manual'}
                     {trajeto.duracaoSegundos
                       ? ` · ${formatarDuracao(trajeto.duracaoSegundos)}`
                       : ''}
                   </p>
                 </div>
-              </div>
 
-              <button
-                type="button"
-                onClick={() => onExcluirTrajeto(trajeto.id)}
-                aria-label={`Excluir trajeto de ${formatarKm(trajeto.km)} km`}
-                className="neu-btn-secondary flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-[var(--rota-text-soft)] hover:text-[var(--rota-danger)] active:scale-[0.98]"
-              >
-                <Trash2
-                  className="h-4 w-4"
-                  strokeWidth={1.75}
-                  aria-hidden="true"
-                />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+                <button
+                  type="button"
+                  onClick={() => onExcluirTrajeto(trajeto.id)}
+                  aria-label={`Excluir trajeto de ${formatarKm(trajeto.km)} km`}
+                  className="-mr-2 flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-[12px] text-[var(--rota-text-soft)] hover:bg-[var(--rota-danger-tint)] hover:text-[var(--rota-danger)] active:scale-[0.98]"
+                >
+                  <Trash2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {totalListaAtual > LIMITE_INICIAL && (
         <button
           type="button"
           onClick={() => setMostrarTodos((prev) => !prev)}
-          className="neu-btn-secondary mt-3 flex w-full min-h-[44px] items-center justify-center gap-1.5 rounded-2xl px-4 text-xs font-semibold text-[var(--rota-text-soft)] hover:text-[var(--rota-text)] active:scale-[0.98]"
+          className="rota-card flex min-h-[48px] w-full items-center justify-center px-4 text-[14px] font-bold text-[var(--rota-accent)] active:scale-[0.99]"
         >
-          {mostrarTodos ? (
-            <>
-              <ChevronUp className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-              Mostrar menos
-            </>
-          ) : (
-            <>
-              <ChevronDown className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-              Ver todos ({totalListaAtual})
-            </>
-          )}
+          {mostrarTodos ? 'Mostrar menos' : `Ver todos (${totalListaAtual})`}
         </button>
       )}
 
-      {/* Modal de edição rápida do lançamento */}
+      {/* Modal de edição */}
       {itemEditando && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/65 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+          style={{ backgroundColor: 'var(--rota-backdrop)' }}
           role="dialog"
           aria-modal="true"
           aria-labelledby="titulo-editar-lancamento"
         >
-          <div className="neu-card w-full max-w-[420px] p-5">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h3 id="titulo-editar-lancamento" className="card-title">
+          <div className="w-full sm:max-w-[460px] rounded-t-[20px] sm:rounded-[20px] bg-[var(--rota-bg)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h2
+                id="titulo-editar-lancamento"
+                className="text-[20px] font-extrabold text-[var(--rota-text)]"
+              >
                 Editar lançamento
-              </h3>
+              </h2>
               <button
                 type="button"
                 onClick={() => setItemEditando(null)}
-                aria-label="Fechar edição"
-                className="neu-btn-secondary flex h-11 w-11 items-center justify-center rounded-2xl text-[var(--rota-text-soft)] hover:text-[var(--rota-text)] active:scale-[0.98]"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-[14px] px-3 text-[15px] font-bold text-[var(--rota-text-soft)] hover:text-[var(--rota-text)]"
               >
-                <X className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                Fechar
               </button>
             </div>
 
-            <form onSubmit={salvarEdicao} className="space-y-4">
+            <form onSubmit={salvarEdicao} className="rota-card p-4 space-y-3">
               <div
                 role="tablist"
                 aria-label="Tipo de lançamento"
-                className="tab-track grid-cols-2"
+                className="rota-segmented grid-cols-2"
               >
                 <button
                   type="button"
@@ -434,10 +332,10 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                     setEditTipo(TipoLancamento.GANHO);
                     setEditCategoria(Plataforma.IFOOD);
                   }}
-                  className={`tab-item ${
+                  className={`rota-segmented-btn ${
                     editTipo === TipoLancamento.GANHO
-                      ? 'bg-[var(--rota-success-soft)] text-[var(--rota-success)] ring-1 ring-[var(--rota-success-soft)]/45'
-                      : 'tab-item-idle'
+                      ? 'rota-segmented-btn-active'
+                      : 'rota-segmented-btn-idle'
                   }`}
                 >
                   Ganho
@@ -450,10 +348,10 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                     setEditTipo(TipoLancamento.GASTO);
                     setEditCategoria(CategoriaGasto.COMBUSTIVEL);
                   }}
-                  className={`tab-item ${
+                  className={`rota-segmented-btn ${
                     editTipo === TipoLancamento.GASTO
-                      ? 'bg-[var(--rota-danger-soft)] text-[var(--rota-danger-text)] ring-1 ring-[var(--rota-danger-soft)]/45'
-                      : 'tab-item-idle'
+                      ? 'rota-segmented-btn-active'
+                      : 'rota-segmented-btn-idle'
                   }`}
                 >
                   Gasto
@@ -461,7 +359,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
               </div>
 
               <div>
-                <span className="block text-xs font-medium text-[var(--rota-text-soft)] mb-2">
+                <span className="mb-1.5 block text-[13px] font-bold text-[var(--rota-text-soft)]">
                   {editTipo === TipoLancamento.GANHO
                     ? 'Plataforma'
                     : 'Categoria'}
@@ -477,12 +375,10 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                         key={cat}
                         type="button"
                         onClick={() => setEditCategoria(cat)}
-                        className={`min-h-[44px] rounded-2xl px-2 sm:px-3 text-xs sm:text-sm font-semibold whitespace-nowrap truncate transition-colors duration-150 active:scale-[0.98] ${
+                        className={`h-[48px] rounded-[14px] border-2 px-3 text-[14px] font-bold truncate transition-colors ${
                           ativo
-                            ? editTipo === TipoLancamento.GANHO
-                              ? 'bg-[var(--rota-success-soft)] text-[var(--rota-success)] ring-1 ring-[var(--rota-success-soft)]/50'
-                              : 'bg-[var(--rota-danger-soft)] text-[var(--rota-danger-text)] ring-1 ring-[var(--rota-danger-soft)]/50'
-                            : 'bg-[var(--rota-surface-2)] text-[var(--rota-text-soft)] hover:text-[var(--rota-text)]'
+                            ? 'bg-[var(--rota-accent-tint)] border-[var(--rota-accent)] text-[var(--rota-accent)]'
+                            : 'bg-[var(--rota-surface-2)] border-transparent text-[var(--rota-text)]'
                         }`}
                       >
                         {rotuloCategoria(cat)}
@@ -495,18 +391,12 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
               <div>
                 <label
                   htmlFor="input-edit-valor"
-                  className="block text-xs font-medium text-[var(--rota-text-soft)] mb-2"
+                  className="mb-1.5 block text-[13px] font-bold text-[var(--rota-text-soft)]"
                 >
                   Valor
                 </label>
-                <div className="neu-inset flex items-center rounded-2xl px-4 min-h-[48px]">
-                  <span
-                    className={`mr-2 text-sm font-semibold ${
-                      editTipo === TipoLancamento.GANHO
-                        ? 'text-[var(--rota-success)]'
-                        : 'text-[var(--rota-danger-text)]'
-                    }`}
-                  >
+                <div className="rota-input flex h-[48px] items-center px-3.5">
+                  <span className="mr-2 text-[15px] font-bold text-[var(--rota-text-soft)]">
                     R$
                   </span>
                   <input
@@ -518,22 +408,24 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                       setEditValorTexto(e.target.value);
                       if (editErro) setEditErro(null);
                     }}
-                    className="w-full bg-transparent text-base font-semibold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none tabular-nums"
+                    className="w-full bg-transparent text-[16px] font-extrabold text-[var(--rota-text)] focus:outline-none tabular-nums"
                   />
                 </div>
                 {editErro && (
-                  <p className="mt-2 text-xs text-[var(--rota-danger-text)]">{editErro}</p>
+                  <p className="mt-1.5 text-[13px] font-bold text-[var(--rota-danger)]">
+                    {editErro}
+                  </p>
                 )}
               </div>
 
               <div>
                 <label
                   htmlFor="input-edit-obs"
-                  className="block text-xs font-medium text-[var(--rota-text-soft)] mb-2"
+                  className="mb-1.5 block text-[13px] font-bold text-[var(--rota-text-soft)]"
                 >
                   Observação
                 </label>
-                <div className="neu-inset flex items-center rounded-2xl px-4 min-h-[48px]">
+                <div className="rota-input flex h-[48px] items-center px-3.5">
                   <input
                     id="input-edit-obs"
                     type="text"
@@ -541,14 +433,14 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                     value={editObs}
                     onChange={(e) => setEditObs(e.target.value)}
                     placeholder="Opcional"
-                    className="w-full bg-transparent text-sm text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/60 focus:outline-none"
+                    className="w-full bg-transparent text-[15px] font-semibold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)] focus:outline-none"
                   />
                 </div>
               </div>
 
               <button
                 type="submit"
-                className="btn-primary-glow flex w-full min-h-[48px] items-center justify-center rounded-2xl px-4 text-sm font-semibold text-[var(--rota-text)] active:scale-[0.98]"
+                className="flex h-[52px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-accent)] text-[15px] font-extrabold text-[var(--rota-on-accent)] active:scale-[0.98]"
               >
                 Salvar alterações
               </button>
@@ -556,6 +448,6 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
           </div>
         </div>
       )}
-    </section>
+    </div>
   );
 };

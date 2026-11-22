@@ -84,8 +84,8 @@ export default defineConfig(() => {
           short_name: 'Rota',
           description:
             'Controle de ganhos, gastos e quilômetros rodados para entregadores de moto.',
-          theme_color: '#0E131D',
-          background_color: '#0E131D',
+          theme_color: '#1D5FD1',
+          background_color: '#F6F7F9',
           display: 'standalone',
           orientation: 'portrait',
           start_url: '/',

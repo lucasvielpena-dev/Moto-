@@ -10,17 +10,29 @@ export function usePWAInstall() {
     useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
+  const [isInIframe, setIsInIframe] = useState(false);
 
   useEffect(() => {
-    const isStandalone =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as unknown as { standalone?: boolean }).standalone ===
-        true;
-    setIsInstalled(isStandalone);
+    const standaloneMedia = window.matchMedia('(display-mode: standalone)');
+    const checkStandalone = () => {
+      const standalone =
+        standaloneMedia.matches ||
+        (window.navigator as unknown as { standalone?: boolean }).standalone ===
+          true;
+      setIsInstalled(standalone);
+    };
+
+    checkStandalone();
 
     const userAgent = window.navigator.userAgent.toLowerCase();
     const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
     setIsIOS(isIOSDevice);
+
+    try {
+      setIsInIframe(window.self !== window.top);
+    } catch {
+      setIsInIframe(true);
+    }
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
@@ -32,10 +44,12 @@ export function usePWAInstall() {
       setDeferredPrompt(null);
     };
 
+    standaloneMedia.addEventListener('change', checkStandalone);
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
+      standaloneMedia.removeEventListener('change', checkStandalone);
       window.removeEventListener(
         'beforeinstallprompt',
         handleBeforeInstallPrompt
@@ -60,6 +74,7 @@ export function usePWAInstall() {
     isInstallable: !!deferredPrompt,
     isInstalled,
     isIOS,
+    isInIframe,
     install,
   };
 }

@@ -1,96 +1,204 @@
 import React, { useState } from 'react';
-import { Download, Share, X } from 'lucide-react';
+import { Download, ExternalLink, MoreVertical, Share } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
 export const PWAInstallButton: React.FC = () => {
-  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
-  const [showIOSGuide, setShowIOSGuide] = useState(false);
+  const { isInstallable, isInstalled, isIOS, isInIframe, install } =
+    usePWAInstall();
+  const [showGuide, setShowGuide] = useState(false);
 
   if (isInstalled) {
     return null;
   }
 
-  if (isInstallable) {
-    return (
-      <button
-        type="button"
-        onClick={install}
-        className="btn-primary-glow flex min-h-[44px] items-center gap-1.5 rounded-2xl px-3.5 text-xs font-semibold text-[#F5F7FA] whitespace-nowrap shrink-0 active:scale-[0.98]"
-      >
-        <Download className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-        Instalar app
-      </button>
-    );
-  }
+  const currentUrl =
+    typeof window !== 'undefined' ? window.location.href : '/';
 
-  if (isIOS) {
-    return (
-      <>
-        <button
-          type="button"
-          onClick={() => setShowIOSGuide(true)}
-          className="neu-btn-secondary flex min-h-[44px] items-center gap-1.5 rounded-2xl px-3.5 text-xs font-semibold text-[#F5F7FA] whitespace-nowrap shrink-0 active:scale-[0.98]"
-        >
-          <Download className="h-4 w-4 text-[#70B7F0]" strokeWidth={1.75} aria-hidden="true" />
-          Instalar
-        </button>
+  return (
+    <>
+      <div className="rota-card px-4 py-3.5 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-extrabold text-[var(--rota-text)]">
+            Aplicativo
+          </h2>
+          <p className="text-[13px] font-semibold text-[var(--rota-text-soft)]">
+            Use offline na tela inicial
+          </p>
+        </div>
 
-        {showIOSGuide && (
-          <div
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/65 backdrop-blur-sm p-4"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="ios-install-title"
+        {isInstallable ? (
+          <button
+            type="button"
+            onClick={install}
+            className="inline-flex min-h-[48px] shrink-0 items-center gap-2 rounded-[14px] bg-[var(--rota-accent)] px-4 text-[14px] font-extrabold text-[var(--rota-on-accent)] active:scale-[0.98]"
           >
-            <div className="neu-card w-full max-w-[420px] p-5">
-              <div className="flex items-center justify-between gap-3">
-                <h3 id="ios-install-title" className="card-title">
-                  Instalar na tela inicial
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowIOSGuide(false)}
-                  aria-label="Fechar instruções"
-                  className="neu-btn-secondary flex h-11 w-11 items-center justify-center rounded-2xl text-[#9AA6B8] hover:text-[#F5F7FA] active:scale-[0.98]"
-                >
-                  <X className="h-4 w-4" strokeWidth={1.75} />
-                </button>
-              </div>
-              <ol className="mt-4 space-y-3 text-sm text-[#9AA6B8] leading-relaxed">
-                <li className="flex items-start gap-2.5">
-                  <span className="font-semibold text-[#70B7F0]">1.</span>
-                  <span>
-                    Toque no botão{' '}
-                    <strong className="inline-flex items-center gap-1 font-semibold text-[#F5F7FA]">
-                      Compartilhar <Share className="h-4 w-4 text-[#70B7F0]" strokeWidth={1.75} />
-                    </strong>{' '}
-                    na barra do Safari.
-                  </span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <span className="font-semibold text-[#70B7F0]">2.</span>
-                  <span>
-                    Role para baixo e toque em{' '}
-                    <strong className="font-semibold text-[#F5F7FA]">
-                      Adicionar à Tela de Início
-                    </strong>
-                    .
-                  </span>
-                </li>
-              </ol>
+            <Download className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Instalar
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowGuide(true)}
+            className="inline-flex min-h-[48px] shrink-0 items-center gap-2 rounded-[14px] bg-[var(--rota-surface-2)] px-4 text-[14px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
+          >
+            <Download className="h-4 w-4 shrink-0" aria-hidden="true" />
+            {isIOS ? 'Instalar' : 'Como instalar'}
+          </button>
+        )}
+      </div>
+
+      {showGuide && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+          style={{ backgroundColor: 'var(--rota-backdrop)' }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pwa-install-title"
+          onClick={() => setShowGuide(false)}
+        >
+          <div
+            className="w-full sm:max-w-[460px] rounded-t-[20px] sm:rounded-[20px] bg-[var(--rota-bg)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h2
+                id="pwa-install-title"
+                className="text-[20px] font-extrabold text-[var(--rota-text)]"
+              >
+                Instalar na tela inicial
+              </h2>
               <button
                 type="button"
-                onClick={() => setShowIOSGuide(false)}
-                className="btn-primary-glow mt-4 w-full min-h-[48px] rounded-2xl text-sm font-semibold text-[#F5F7FA] active:scale-[0.98]"
+                onClick={() => setShowGuide(false)}
+                className="inline-flex min-h-[48px] items-center justify-center rounded-[14px] px-3 text-[15px] font-bold text-[var(--rota-text-soft)] hover:text-[var(--rota-text)]"
+              >
+                Fechar
+              </button>
+            </div>
+
+            <div className="rota-card p-4 space-y-3">
+              {isInIframe && (
+                <div className="rounded-[14px] bg-[var(--rota-accent-tint)] p-3 space-y-2.5">
+                  <p className="text-[13px] font-bold text-[var(--rota-text)] leading-snug">
+                    Para instalar no celular, abra o app direto no navegador
+                    (fora desta pré-visualização).
+                  </p>
+                  <a
+                    href={currentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[14px] bg-[var(--rota-accent)] px-4 text-[14px] font-extrabold text-[var(--rota-on-accent)] active:scale-[0.98]"
+                  >
+                    <ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    Abrir no navegador
+                  </a>
+                </div>
+              )}
+
+              {isIOS ? (
+                <ol className="space-y-3 text-[14px] font-semibold text-[var(--rota-text-soft)] leading-relaxed">
+                  <li className="flex items-start gap-2.5">
+                    <span className="font-extrabold text-[var(--rota-text)]">
+                      1.
+                    </span>
+                    <span>
+                      Abra este endereço no{' '}
+                      <strong className="font-extrabold text-[var(--rota-text)]">
+                        Safari
+                      </strong>{' '}
+                      do iPhone.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="font-extrabold text-[var(--rota-text)]">
+                      2.
+                    </span>
+                    <span>
+                      Toque no botão{' '}
+                      <strong className="inline-flex items-center gap-1 font-extrabold text-[var(--rota-text)]">
+                        Compartilhar{' '}
+                        <Share className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      </strong>{' '}
+                      na barra inferior.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="font-extrabold text-[var(--rota-text)]">
+                      3.
+                    </span>
+                    <span>
+                      Toque em{' '}
+                      <strong className="font-extrabold text-[var(--rota-text)]">
+                        Adicionar à Tela de Início
+                      </strong>{' '}
+                      e confirme em{' '}
+                      <strong className="font-extrabold text-[var(--rota-text)]">
+                        Adicionar
+                      </strong>
+                      .
+                    </span>
+                  </li>
+                </ol>
+              ) : (
+                <ol className="space-y-3 text-[14px] font-semibold text-[var(--rota-text-soft)] leading-relaxed">
+                  <li className="flex items-start gap-2.5">
+                    <span className="font-extrabold text-[var(--rota-text)]">
+                      1.
+                    </span>
+                    <span>
+                      Abra o link direto no{' '}
+                      <strong className="font-extrabold text-[var(--rota-text)]">
+                        Google Chrome
+                      </strong>{' '}
+                      do celular.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="font-extrabold text-[var(--rota-text)]">
+                      2.
+                    </span>
+                    <span>
+                      Toque no menu{' '}
+                      <strong className="inline-flex items-center gap-0.5 font-extrabold text-[var(--rota-text)]">
+                        <MoreVertical
+                          className="h-4 w-4 shrink-0"
+                          aria-hidden="true"
+                        />
+                        Mais opções
+                      </strong>{' '}
+                      no canto superior direito.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="font-extrabold text-[var(--rota-text)]">
+                      3.
+                    </span>
+                    <span>
+                      Toque em{' '}
+                      <strong className="font-extrabold text-[var(--rota-text)]">
+                        Instalar aplicativo
+                      </strong>{' '}
+                      (ou{' '}
+                      <strong className="font-extrabold text-[var(--rota-text)]">
+                        Adicionar à tela inicial
+                      </strong>
+                      ).
+                    </span>
+                  </li>
+                </ol>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowGuide(false)}
+                className="w-full min-h-[48px] rounded-[14px] bg-[var(--rota-surface-2)] text-[15px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
               >
                 Entendi
               </button>
             </div>
           </div>
-        )}
-      </>
-    );
-  }
-
-  return null;
+        </div>
+      )}
+    </>
+  );
 };

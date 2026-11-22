@@ -30,6 +30,8 @@ export interface Lancamento {
   valor: number;
   data: string; // ISO string
   observacao?: string;
+  kmEntrega?: number;
+  duracaoEntregaSegundos?: number;
 }
 
 export interface Trajeto {
