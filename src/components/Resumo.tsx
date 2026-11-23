@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Entrega,
   FiltroPeriodo,
   Lancamento,
   PLATAFORMAS,
@@ -7,7 +8,12 @@ import {
   TipoLancamento,
   Trajeto,
 } from '../types';
-import { formatarKm, formatarMoeda, rotuloCategoria } from '../utils/formatters';
+import {
+  formatarDuracaoCurta,
+  formatarKm,
+  formatarMoeda,
+  rotuloCategoria,
+} from '../utils/formatters';
 import { obterEntregasLancamento } from '../utils/storage';
 
 interface ResumoProps {
@@ -16,6 +22,7 @@ interface ResumoProps {
   lancamentos: Lancamento[];
   todosLancamentos: Lancamento[];
   trajetos: Trajeto[];
+  entregas?: Entrega[];
   kmEmAndamento?: number;
   kmEntregaEmAndamento?: number;
   tempoEmAndamentoSegundos?: number;
@@ -53,6 +60,7 @@ export const Resumo: React.FC<ResumoProps> = ({
   lancamentos,
   todosLancamentos,
   trajetos,
+  entregas = [],
   kmEmAndamento = 0,
   kmEntregaEmAndamento = 0,
   tempoEmAndamentoSegundos = 0,
@@ -86,32 +94,75 @@ export const Resumo: React.FC<ResumoProps> = ({
     [lancamentos]
   );
 
-  const kmEntregasSalvos = entregasComKm.reduce(
-    (acc, l) => acc + (l.kmEntrega ?? 0),
+  const kmEntregasRegistradas = useMemo(
+    () => entregas.reduce((acc, e) => acc + e.km, 0),
+    [entregas]
+  );
+  const tempoEntregasRegistradas = useMemo(
+    () => entregas.reduce((acc, e) => acc + e.duracaoSegundos, 0),
+    [entregas]
+  );
+  const entregasComValor = useMemo(
+    () =>
+      entregas.filter(
+        (e) => typeof e.valor === 'number' && Number.isFinite(e.valor) && e.valor > 0
+      ),
+    [entregas]
+  );
+  const somaValorEntregasComValor = entregasComValor.reduce(
+    (acc, e) => acc + (e.valor ?? 0),
     0
   );
-  const kmEntregas = kmEntregasSalvos + kmEntregaEmAndamento;
-  const kmDeslocamento = Math.max(0, totalKm - kmEntregas);
+  const somaKmEntregasComValor = entregasComValor.reduce(
+    (acc, e) => acc + e.km,
+    0
+  );
+  const valorPorKmEmEntrega =
+    somaKmEntregasComValor > 0
+      ? somaValorEntregasComValor / somaKmEntregasComValor
+      : null;
+
+  const kmDeslocamentoEntregas = Math.max(0, totalKm - kmEntregasRegistradas);
   const percentualKmEntrega =
-    totalKm > 0 ? Math.min(100, (kmEntregas / totalKm) * 100) : 0;
+    totalKm > 0 ? Math.min(100, (kmEntregasRegistradas / totalKm) * 100) : 0;
   const percentualKmDeslocamento =
     totalKm > 0 ? Math.max(0, 100 - percentualKmEntrega) : 0;
+  const mediaKmPorEntrega =
+    entregas.length > 0 ? kmEntregasRegistradas / entregas.length : 0;
+  const mediaTempoPorEntregaSegundos =
+    entregas.length > 0
+      ? Math.round(tempoEntregasRegistradas / entregas.length)
+      : 0;
 
-  const receitaEntregas = entregasComKm.reduce((acc, l) => acc + l.valor, 0);
+  const kmEntregasVisao =
+    entregas.length > 0
+      ? kmEntregasRegistradas + kmEntregaEmAndamento
+      : entregasComKm.reduce((acc, l) => acc + (l.kmEntrega ?? 0), 0) +
+        kmEntregaEmAndamento;
+
+  const receitaEntregas =
+    entregas.length > 0
+      ? somaValorEntregasComValor
+      : entregasComKm.reduce((acc, l) => acc + l.valor, 0);
 
   const modoEntregas = visaoKm === 'entregas';
   const receitaExibida = modoEntregas ? receitaEntregas : totalGanhos;
   const gastosExibidos =
-    modoEntregas && entregasComKm.length === 0 ? 0 : totalGastos;
+    modoEntregas && entregas.length === 0 && entregasComKm.length === 0
+      ? 0
+      : totalGastos;
   const lucroExibido = receitaExibida - gastosExibidos;
-  const kmExibido = modoEntregas ? kmEntregas : totalKm;
+  const kmExibido = modoEntregas ? kmEntregasVisao : totalKm;
 
   const entregasPeriodo = useMemo(() => {
+    if (modoEntregas && entregas.length > 0) {
+      return entregas.length;
+    }
     const base = modoEntregas
       ? entregasComKm
       : lancamentos.filter((l) => l.tipo === TipoLancamento.GANHO);
     return base.reduce((acc, l) => acc + obterEntregasLancamento(l), 0);
-  }, [lancamentos, entregasComKm, modoEntregas]);
+  }, [lancamentos, entregas, entregasComKm, modoEntregas]);
 
   const valorPorEntrega =
     entregasPeriodo > 0 ? receitaExibida / entregasPeriodo : 0;
@@ -402,47 +453,80 @@ export const Resumo: React.FC<ResumoProps> = ({
         )}
       </section>
 
-      {/* Cartão Separação de km: Em entrega vs Deslocamento */}
-      <section
-        aria-label="Separação de quilômetros"
-        className="rota-card px-4 py-3.5 space-y-2.5"
-      >
-        <div className="flex items-baseline justify-between gap-2">
-          <h2 className="text-[15px] font-extrabold text-[var(--rota-text)]">
-            Km em entrega vs deslocamento
-          </h2>
-          <span className="text-[13px] font-bold text-[var(--rota-text-soft)] tabular-nums">
-            {formatarKm(totalKm)} km total
-          </span>
-        </div>
-
-        <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--rota-surface-2)]">
-          <div
-            className="h-full rounded-full bg-[var(--rota-accent)] transition-all duration-300"
-            style={{ width: `${percentualKmEntrega}%` }}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 divide-x divide-[var(--rota-line)] pt-0.5">
-          <div className="min-w-0 pr-3">
-            <span className="block text-[13px] font-bold text-[var(--rota-text-soft)] tabular-nums">
-              Em entrega ({Math.round(percentualKmEntrega)}%)
-            </span>
-            <span className="mt-0.5 block truncate text-[18px] leading-[22px] font-extrabold text-[var(--rota-accent)] tabular-nums">
-              {formatarKm(kmEntregas)} km
+      {/* Cartão Km por entrega (visível apenas quando há entregas no período) */}
+      {entregas.length > 0 && (
+        <section
+          aria-label="Km por entrega"
+          className="rota-card px-4 py-3.5 space-y-3"
+        >
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="text-[15px] font-extrabold text-[var(--rota-text)]">
+              Km por entrega
+            </h2>
+            <span className="text-[13px] font-bold text-[var(--rota-text-soft)] tabular-nums">
+              {formatarKm(totalKm)} km total
             </span>
           </div>
 
-          <div className="min-w-0 pl-3">
-            <span className="block text-[13px] font-bold text-[var(--rota-text-soft)] tabular-nums">
-              Deslocamento ({Math.round(percentualKmDeslocamento)}%)
-            </span>
-            <span className="mt-0.5 block truncate text-[18px] leading-[22px] font-extrabold text-[var(--rota-text)] tabular-nums">
-              {formatarKm(kmDeslocamento)} km
-            </span>
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--rota-surface-2)]">
+            <div
+              className="h-full rounded-full bg-[var(--rota-accent)] transition-all duration-300"
+              style={{ width: `${percentualKmEntrega}%` }}
+            />
           </div>
-        </div>
-      </section>
+
+          <div className="grid grid-cols-2 divide-x divide-[var(--rota-line)]">
+            <div className="min-w-0 pr-3">
+              <span className="block text-[13px] font-bold text-[var(--rota-text-soft)] tabular-nums">
+                Em entrega ({Math.round(percentualKmEntrega)}%)
+              </span>
+              <span className="mt-0.5 block truncate text-[18px] leading-[22px] font-extrabold text-[var(--rota-accent)] tabular-nums">
+                {formatarKm(kmEntregasRegistradas)} km
+              </span>
+            </div>
+
+            <div className="min-w-0 pl-3">
+              <span className="block text-[13px] font-bold text-[var(--rota-text-soft)] tabular-nums">
+                Deslocamento ({Math.round(percentualKmDeslocamento)}%)
+              </span>
+              <span className="mt-0.5 block truncate text-[18px] leading-[22px] font-extrabold text-[var(--rota-text)] tabular-nums">
+                {formatarKm(kmDeslocamentoEntregas)} km
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 divide-x divide-[var(--rota-line)] border-t border-[var(--rota-line)] pt-2.5">
+            <div className="min-w-0 pr-2">
+              <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
+                Média km
+              </span>
+              <span className="mt-0.5 block truncate text-[16px] leading-[20px] font-extrabold text-[var(--rota-text)] tabular-nums">
+                {formatarKm(mediaKmPorEntrega)} km
+              </span>
+            </div>
+
+            <div className="min-w-0 px-2.5">
+              <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
+                Tempo médio
+              </span>
+              <span className="mt-0.5 block truncate text-[16px] leading-[20px] font-extrabold text-[var(--rota-text)] tabular-nums">
+                {formatarDuracaoCurta(mediaTempoPorEntregaSegundos)}
+              </span>
+            </div>
+
+            <div className="min-w-0 pl-2.5">
+              <span className="block text-[13px] font-bold text-[var(--rota-text-soft)]">
+                R$/km ent.
+              </span>
+              <span className="mt-0.5 block truncate text-[16px] leading-[20px] font-extrabold text-[var(--rota-text)] tabular-nums">
+                {valorPorKmEmEntrega !== null
+                  ? formatarMoeda(valorPorKmEmEntrega)
+                  : '—'}
+              </span>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Cartão de 3 colunas: Ganhos, Gastos, Lucro (+ Reservas no Mês) */}
       <section

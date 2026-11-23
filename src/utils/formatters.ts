@@ -1,4 +1,4 @@
-import { FiltroPeriodo } from '../types';
+import { Entrega, FiltroPeriodo } from '../types';
 
 const brlFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -100,6 +100,51 @@ export function filtrarPorPeriodo<T extends { data: string }>(
   });
 }
 
+export function filtrarEntregasPorPeriodo(
+  entregas: Entrega[],
+  periodo: FiltroPeriodo,
+  agora: Date = new Date()
+): Entrega[] {
+  const inicioHoje = new Date(
+    agora.getFullYear(),
+    agora.getMonth(),
+    agora.getDate(),
+    0,
+    0,
+    0,
+    0
+  );
+  const fimHoje = new Date(
+    agora.getFullYear(),
+    agora.getMonth(),
+    agora.getDate(),
+    23,
+    59,
+    59,
+    999
+  );
+
+  return entregas.filter((item) => {
+    const d = new Date(item.fimIso || item.inicioIso);
+    if (Number.isNaN(d.getTime())) return false;
+
+    if (periodo === FiltroPeriodo.HOJE) {
+      return d >= inicioHoje && d <= fimHoje;
+    }
+
+    if (periodo === FiltroPeriodo.SETE_DIAS) {
+      const inicio7Dias = new Date(inicioHoje);
+      inicio7Dias.setDate(inicio7Dias.getDate() - 6);
+      return d >= inicio7Dias && d <= fimHoje;
+    }
+
+    return (
+      d.getFullYear() === agora.getFullYear() &&
+      d.getMonth() === agora.getMonth()
+    );
+  });
+}
+
 export function rotuloPeriodo(periodo: FiltroPeriodo): string {
   switch (periodo) {
     case FiltroPeriodo.HOJE:
@@ -118,4 +163,16 @@ export function formatarDuracao(segundos: number): string {
   const segs = safe % 60;
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${pad(horas)}:${pad(minutos)}:${pad(segs)}`;
+}
+
+export function formatarDuracaoCurta(segundos: number): string {
+  const safe = Number.isFinite(segundos) && segundos > 0 ? Math.floor(segundos) : 0;
+  const horas = Math.floor(safe / 3600);
+  const minutos = Math.floor((safe % 3600) / 60);
+  const segs = safe % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  if (horas > 0) {
+    return `${pad(horas)}:${pad(minutos)}:${pad(segs)}`;
+  }
+  return `${pad(minutos)}:${pad(segs)}`;
 }

@@ -49,6 +49,17 @@ export interface Vencimento {
   dataVencimento: string; // YYYY-MM-DD
 }
 
+export interface Entrega {
+  id: string;
+  inicioIso: string;
+  fimIso: string;
+  km: number;
+  duracaoSegundos: number;
+  valor?: number;
+  plataforma?: string;
+  lancamentoId?: string;
+}
+
 export type StatusOdometro = 'idle' | 'running' | 'paused';
 
 export const PLATAFORMAS: Plataforma[] = [

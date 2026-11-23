@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from 'lucide-react';
 import {
   CATEGORIAS_GASTO,
   CategoriaGasto,
+  Entrega,
   FiltroPeriodo,
   Lancamento,
   PLATAFORMAS,
@@ -13,6 +14,7 @@ import {
 import {
   formatarDataHora,
   formatarDuracao,
+  formatarDuracaoCurta,
   formatarKm,
   formatarMoeda,
   parseValorNumerico,
@@ -25,9 +27,11 @@ interface ListaLancamentosProps {
   onMudarPeriodo: (periodo: FiltroPeriodo) => void;
   lancamentos: Lancamento[];
   trajetos: Trajeto[];
+  entregas?: Entrega[];
   onEditarLancamento: (atualizado: Lancamento) => void;
   onExcluirLancamento: (id: string) => void;
   onExcluirTrajeto: (id: string) => void;
+  onExcluirEntrega?: (id: string, excluirLancamentoVinculado: boolean) => void;
 }
 
 const OPCOES_PERIODO: { valor: FiltroPeriodo; rotulo: string }[] = [
@@ -43,12 +47,16 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
   onMudarPeriodo,
   lancamentos,
   trajetos,
+  entregas = [],
   onEditarLancamento,
   onExcluirLancamento,
   onExcluirTrajeto,
+  onExcluirEntrega,
 }) => {
   const [aba, setAba] = useState<'lancamentos' | 'trajetos'>('lancamentos');
   const [mostrarTodos, setMostrarTodos] = useState<boolean>(false);
+  const [entregaConfirmandoExcluir, setEntregaConfirmandoExcluir] =
+    useState<Entrega | null>(null);
 
   const [itemEditando, setItemEditando] = useState<Lancamento | null>(null);
   const [editTipo, setEditTipo] = useState<TipoLancamento>(TipoLancamento.GANHO);
@@ -62,6 +70,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
 
   useEffect(() => {
     setMostrarTodos(false);
+    setEntregaConfirmandoExcluir(null);
   }, [periodo, aba]);
 
   const abrirEdicao = (item: Lancamento) => {
@@ -108,17 +117,30 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
     setItemEditando(null);
   };
 
-  const lancamentosOrdenados = [...lancamentos].sort(
-    (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()
-  );
+  type RegistroHistorico =
+    | { tipoRegistro: 'lancamento'; dataOrdenacao: number; item: Lancamento }
+    | { tipoRegistro: 'entrega'; dataOrdenacao: number; entrega: Entrega };
+
+  const registrosCombinados: RegistroHistorico[] = [
+    ...lancamentos.map((item) => ({
+      tipoRegistro: 'lancamento' as const,
+      dataOrdenacao: new Date(item.data).getTime(),
+      item,
+    })),
+    ...entregas.map((entrega) => ({
+      tipoRegistro: 'entrega' as const,
+      dataOrdenacao: new Date(entrega.fimIso || entrega.inicioIso).getTime(),
+      entrega,
+    })),
+  ].sort((a, b) => b.dataOrdenacao - a.dataOrdenacao);
 
   const trajetosOrdenados = [...trajetos].sort(
     (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()
   );
 
-  const lancamentosVisiveis = mostrarTodos
-    ? lancamentosOrdenados
-    : lancamentosOrdenados.slice(0, LIMITE_INICIAL);
+  const registrosVisiveis = mostrarTodos
+    ? registrosCombinados
+    : registrosCombinados.slice(0, LIMITE_INICIAL);
 
   const trajetosVisiveis = mostrarTodos
     ? trajetosOrdenados
@@ -126,7 +148,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
 
   const totalListaAtual =
     aba === 'lancamentos'
-      ? lancamentosOrdenados.length
+      ? registrosCombinados.length
       : trajetosOrdenados.length;
 
   return (
@@ -175,7 +197,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
               : 'rota-segmented-btn-idle'
           }`}
         >
-          Lançamentos ({lancamentosOrdenados.length})
+          Lançamentos ({registrosCombinados.length})
         </button>
         <button
           type="button"
@@ -195,13 +217,55 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
       {/* Lista em cartão único sem cartões aninhados */}
       <div className="rota-card overflow-hidden">
         {aba === 'lancamentos' ? (
-          lancamentosOrdenados.length === 0 ? (
+          registrosCombinados.length === 0 ? (
             <p className="px-4 py-6 text-center text-[14px] font-semibold text-[var(--rota-text-soft)]">
-              Nenhum ganho ou gasto registrado neste período.
+              Nenhum ganho, gasto ou entrega registrado neste período.
             </p>
           ) : (
             <ul className="divide-y divide-[var(--rota-line)]">
-              {lancamentosVisiveis.map((item) => {
+              {registrosVisiveis.map((reg) => {
+                if (reg.tipoRegistro === 'entrega') {
+                  const { entrega } = reg;
+                  const tituloEntrega = `Entrega · ${formatarKm(entrega.km)} km · ${formatarDuracaoCurta(entrega.duracaoSegundos)}`;
+                  const temValor =
+                    typeof entrega.valor === 'number' && entrega.valor > 0;
+                  return (
+                    <li
+                      key={`ent-${entrega.id}`}
+                      className="flex min-h-[56px] items-center justify-between gap-2 px-4 py-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[15px] font-bold text-[var(--rota-text)] tabular-nums">
+                          {tituloEntrega}
+                        </p>
+                        <p className="truncate text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
+                          {formatarDataHora(entrega.fimIso)}
+                          {entrega.plataforma
+                            ? ` · ${rotuloCategoria(entrega.plataforma)}`
+                            : ''}
+                        </p>
+                      </div>
+
+                      <div className="-mr-2 flex shrink-0 items-center">
+                        {temValor && (
+                          <span className="mr-1 text-[15px] font-extrabold text-[var(--rota-accent)] tabular-nums whitespace-nowrap">
+                            {formatarMoeda(entrega.valor!)}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setEntregaConfirmandoExcluir(entrega)}
+                          aria-label={`Excluir ${tituloEntrega}`}
+                          className="flex h-[48px] w-[48px] items-center justify-center rounded-[12px] text-[var(--rota-text-soft)] hover:bg-[var(--rota-danger-tint)] hover:text-[var(--rota-danger)] active:scale-[0.98]"
+                        >
+                          <Trash2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        </button>
+                      </div>
+                    </li>
+                  );
+                }
+
+                const { item } = reg;
                 const ehGanho = item.tipo === TipoLancamento.GANHO;
                 const nomeCategoria = rotuloCategoria(item.categoria);
                 return (
@@ -482,6 +546,80 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                 Salvar alterações
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmação de exclusão de entrega */}
+      {entregaConfirmandoExcluir && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+          style={{ backgroundColor: 'var(--rota-backdrop)' }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="titulo-excluir-entrega"
+        >
+          <div className="w-full sm:max-w-[420px] rounded-t-[20px] sm:rounded-[20px] bg-[var(--rota-bg)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3">
+            <h2
+              id="titulo-excluir-entrega"
+              className="text-[18px] font-extrabold text-[var(--rota-text)]"
+            >
+              Excluir entrega
+            </h2>
+            <p className="text-[14px] font-semibold text-[var(--rota-text-soft)]">
+              {entregaConfirmandoExcluir.lancamentoId
+                ? `Entrega de ${formatarKm(entregaConfirmandoExcluir.km)} km (${formatarMoeda(entregaConfirmandoExcluir.valor ?? 0)}). Também excluir o lançamento de ganho vinculado?`
+                : `Deseja excluir a entrega de ${formatarKm(entregaConfirmandoExcluir.km)} km?`}
+            </p>
+
+            <div className="space-y-2">
+              {entregaConfirmandoExcluir.lancamentoId ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const id = entregaConfirmandoExcluir.id;
+                      setEntregaConfirmandoExcluir(null);
+                      onExcluirEntrega?.(id, true);
+                    }}
+                    className="flex h-[48px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-danger)] px-4 text-[14px] font-extrabold text-white active:scale-[0.98]"
+                  >
+                    Excluir entrega e ganho
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const id = entregaConfirmandoExcluir.id;
+                      setEntregaConfirmandoExcluir(null);
+                      onExcluirEntrega?.(id, false);
+                    }}
+                    className="flex h-[48px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-surface-2)] px-4 text-[14px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
+                  >
+                    Excluir só a entrega
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = entregaConfirmandoExcluir.id;
+                    setEntregaConfirmandoExcluir(null);
+                    onExcluirEntrega?.(id, false);
+                  }}
+                  className="flex h-[48px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-danger)] px-4 text-[14px] font-extrabold text-white active:scale-[0.98]"
+                >
+                  Excluir entrega
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setEntregaConfirmandoExcluir(null)}
+                className="flex h-[48px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-surface)] px-4 text-[14px] font-bold text-[var(--rota-text-soft)] active:scale-[0.98]"
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}

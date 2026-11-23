@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pencil, Printer, Share2, Trash2 } from 'lucide-react';
-import { Lancamento, Trajeto, Vencimento } from '../types';
+import { Entrega, Lancamento, Trajeto, Vencimento } from '../types';
 import {
   formatarKm,
   formatarMoeda,
@@ -36,8 +36,11 @@ interface ResumoHojeCompartilhar {
 interface ManutencaoBackupProps {
   tema: PreferenciaTema;
   onMudarTema: (tema: PreferenciaTema) => void;
+  altoContraste?: boolean;
+  onMudarAltoContraste?: (ativo: boolean) => void;
   todosLancamentos: Lancamento[];
   todosTrajetos: Trajeto[];
+  todasEntregas?: Entrega[];
   metaDiaria: number;
   onMudarMetaDiaria: (meta: number) => void;
   minLucroKm: number;
@@ -61,7 +64,9 @@ interface ManutencaoBackupProps {
     minLucroKm?: number,
     reservaKm?: number,
     reservaMes?: number,
-    vencimentos?: Vencimento[]
+    vencimentos?: Vencimento[],
+    entregas?: Entrega[],
+    altoContraste?: boolean
   ) => void;
 }
 
@@ -111,8 +116,11 @@ const OPCOES_TEMA: { valor: PreferenciaTema; rotulo: string }[] = [
 export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
   tema,
   onMudarTema,
+  altoContraste = false,
+  onMudarAltoContraste,
   todosLancamentos,
   todosTrajetos,
+  todasEntregas = [],
   metaDiaria,
   onMudarMetaDiaria,
   minLucroKm,
@@ -331,20 +339,30 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
     minLucroKm,
     reservaKm,
     reservaMes,
+    altoContraste,
     percentualReserva,
     configOleo,
     vencimentos: vencimentos.length > 0 ? vencimentos : undefined,
+    entregas: todasEntregas.length > 0 ? todasEntregas : undefined,
     lancamentos: todosLancamentos,
     trajetos: todosTrajetos,
   });
 
   const handleExportarCsv = () => {
-    if (todosLancamentos.length === 0 && todosTrajetos.length === 0) {
+    if (
+      todosLancamentos.length === 0 &&
+      todosTrajetos.length === 0 &&
+      todasEntregas.length === 0
+    ) {
       exibirMensagemBackup('Não há dados para exportar ainda.', true);
       return;
     }
     const dataStr = new Date().toISOString().slice(0, 10);
-    const csv = gerarConteudoCsv(todosLancamentos, todosTrajetos);
+    const csv = gerarConteudoCsv(
+      todosLancamentos,
+      todosTrajetos,
+      todasEntregas
+    );
     baixarArquivo(
       csv,
       `rota-relatorio-${dataStr}.csv`,
@@ -457,7 +475,9 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
         backup.minLucroKm,
         backup.reservaKm,
         backup.reservaMes,
-        backup.vencimentos
+        backup.vencimentos,
+        backup.entregas,
+        backup.altoContraste
       );
 
       if (backup.configOleo) {
@@ -544,10 +564,10 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
   return (
     <div className="space-y-3">
       {/* Aparência */}
-      <section aria-labelledby="titulo-aparencia" className="rota-card p-3.5">
+      <section aria-labelledby="titulo-aparencia" className="rota-card p-3.5 space-y-2.5">
         <h3
           id="titulo-aparencia"
-          className="mb-2.5 text-[15px] font-extrabold text-[var(--rota-text)]"
+          className="text-[15px] font-extrabold text-[var(--rota-text)]"
         >
           Aparência
         </h3>
@@ -576,6 +596,27 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
             );
           })}
         </div>
+
+        {onMudarAltoContraste && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={altoContraste}
+            onClick={() => onMudarAltoContraste(!altoContraste)}
+            className="flex min-h-[48px] w-full items-center justify-between gap-3 rounded-[14px] bg-[var(--rota-surface-2)] px-3.5 text-[14px] font-bold text-[var(--rota-text)] active:scale-[0.99]"
+          >
+            <span>Alto contraste</span>
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-[13px] font-extrabold ${
+                altoContraste
+                  ? 'bg-[var(--rota-accent)] text-[var(--rota-on-accent)]'
+                  : 'bg-[var(--rota-surface)] text-[var(--rota-text-soft)]'
+              }`}
+            >
+              {altoContraste ? 'Ativado' : 'Desativado'}
+            </span>
+          </button>
+        )}
       </section>
 
       {/* Meta diária */}

@@ -1,5 +1,6 @@
 import {
   CategoriaGasto,
+  Entrega,
   Lancamento,
   Plataforma,
   TipoLancamento,
@@ -15,7 +16,9 @@ const KEY_META_DIARIA = 'rota_meta_diaria_v1';
 const KEY_ULTIMO_KM_PAINEL = 'rota_ultimo_km_painel_v1';
 const KEY_CONFIG_OLEO = 'rota_config_oleo_v1';
 const KEY_PERCENTUAL_RESERVA = 'rota_percentual_reserva_v1';
-const KEY_ENTREGA_ATIVA = 'rota_odometro_entrega_ativa_v1';
+const KEY_ENTREGA_ATIVA_LEGADO = 'rota_odometro_entrega_ativa_v1';
+const KEY_ENTREGA_ATUAL = 'rota_entrega_atual_v1';
+const KEY_ENTREGAS = 'rota_entregas_v1';
 const KEY_TEMA = 'rota_tema_v1';
 const KEY_MIN_LUCRO_KM = 'rota_min_lucro_km_v1';
 const KEY_MODO_MOVIMENTO = 'rota_modo_movimento_v1';
@@ -25,6 +28,12 @@ const KEY_RESERVA_MES = 'rota_reserva_mes_v1';
 const KEY_VENCIMENTOS = 'rota_vencimentos_v1';
 
 export type PreferenciaTema = 'auto' | 'claro' | 'escuro';
+
+export interface EntregaAtual {
+  inicioIso: string;
+  kmInicial: number;
+  segundosInicial: number;
+}
 
 export interface EntregaEmAndamento {
   ativa: boolean;
@@ -154,6 +163,78 @@ function sanitizarVencimentos(itens: unknown[]): Vencimento[] {
     }));
 }
 
+function sanitizarEntregas(itens: unknown[]): Entrega[] {
+  return itens
+    .filter((item): item is Entrega => {
+      if (!item || typeof item !== 'object') return false;
+      const e = item as Partial<Entrega>;
+      if (typeof e.id !== 'string' || !e.id.trim()) return false;
+      if (
+        typeof e.inicioIso !== 'string' ||
+        Number.isNaN(new Date(e.inicioIso).getTime())
+      ) {
+        return false;
+      }
+      if (
+        typeof e.fimIso !== 'string' ||
+        Number.isNaN(new Date(e.fimIso).getTime())
+      ) {
+        return false;
+      }
+      if (typeof e.km !== 'number' || !Number.isFinite(e.km) || e.km < 0) {
+        return false;
+      }
+      if (
+        typeof e.duracaoSegundos !== 'number' ||
+        !Number.isFinite(e.duracaoSegundos) ||
+        e.duracaoSegundos < 0
+      ) {
+        return false;
+      }
+      return true;
+    })
+    .map((item) => ({
+      id: item.id,
+      inicioIso: item.inicioIso,
+      fimIso: item.fimIso,
+      km: Number(Math.max(0, item.km).toFixed(2)),
+      duracaoSegundos: Math.max(0, Math.floor(item.duracaoSegundos)),
+      valor:
+        typeof item.valor === 'number' &&
+        Number.isFinite(item.valor) &&
+        item.valor > 0
+          ? Number(item.valor.toFixed(2))
+          : undefined,
+      plataforma:
+        typeof item.plataforma === 'string' && item.plataforma.trim()
+          ? item.plataforma.trim().slice(0, 40)
+          : undefined,
+      lancamentoId:
+        typeof item.lancamentoId === 'string' && item.lancamentoId.trim()
+          ? item.lancamentoId.trim()
+          : undefined,
+    }));
+}
+
+export function carregarEntregas(): Entrega[] {
+  try {
+    const raw = localStorage.getItem(KEY_ENTREGAS);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? sanitizarEntregas(parsed) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function salvarEntregas(entregas: Entrega[]): void {
+  try {
+    localStorage.setItem(KEY_ENTREGAS, JSON.stringify(entregas));
+  } catch {
+    // Ignore storage quota errors gracefully
+  }
+}
+
 export function carregarLancamentos(): Lancamento[] {
   try {
     const raw = localStorage.getItem(KEY_LANCAMENTOS);
@@ -233,48 +314,97 @@ export function salvarTempoOdometroSegundos(segundos: number): void {
   }
 }
 
-export function carregarEntregaEmAndamento(): EntregaEmAndamento | null {
+export function carregarEntregaAtual(): EntregaAtual | null {
   try {
-    const raw = localStorage.getItem(KEY_ENTREGA_ATIVA);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<EntregaEmAndamento>;
-    if (
-      !parsed ||
-      parsed.ativa !== true ||
-      typeof parsed.kmInicio !== 'number' ||
-      !Number.isFinite(parsed.kmInicio) ||
-      parsed.kmInicio < 0 ||
-      typeof parsed.tempoInicioSegundos !== 'number' ||
-      !Number.isFinite(parsed.tempoInicioSegundos) ||
-      parsed.tempoInicioSegundos < 0
-    ) {
+    const raw = localStorage.getItem(KEY_ENTREGA_ATUAL);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<EntregaAtual>;
+      if (
+        parsed &&
+        typeof parsed.inicioIso === 'string' &&
+        !Number.isNaN(new Date(parsed.inicioIso).getTime()) &&
+        typeof parsed.kmInicial === 'number' &&
+        Number.isFinite(parsed.kmInicial) &&
+        parsed.kmInicial >= 0 &&
+        typeof parsed.segundosInicial === 'number' &&
+        Number.isFinite(parsed.segundosInicial) &&
+        parsed.segundosInicial >= 0
+      ) {
+        return {
+          inicioIso: parsed.inicioIso,
+          kmInicial: parsed.kmInicial,
+          segundosInicial: Math.floor(parsed.segundosInicial),
+        };
+      }
       return null;
     }
-    return {
-      ativa: true,
-      kmInicio: parsed.kmInicio,
-      tempoInicioSegundos: Math.floor(parsed.tempoInicioSegundos),
-      iniciadaEm:
-        typeof parsed.iniciadaEm === 'string'
-          ? parsed.iniciadaEm
-          : new Date().toISOString(),
-    };
+
+    // Fallback seguro caso exista chave legada
+    const rawLegado = localStorage.getItem(KEY_ENTREGA_ATIVA_LEGADO);
+    if (!rawLegado) return null;
+    const parsedLegado = JSON.parse(rawLegado) as Partial<EntregaEmAndamento>;
+    if (
+      parsedLegado &&
+      parsedLegado.ativa === true &&
+      typeof parsedLegado.kmInicio === 'number' &&
+      Number.isFinite(parsedLegado.kmInicio) &&
+      parsedLegado.kmInicio >= 0 &&
+      typeof parsedLegado.tempoInicioSegundos === 'number' &&
+      Number.isFinite(parsedLegado.tempoInicioSegundos) &&
+      parsedLegado.tempoInicioSegundos >= 0
+    ) {
+      return {
+        inicioIso:
+          typeof parsedLegado.iniciadaEm === 'string' &&
+          !Number.isNaN(new Date(parsedLegado.iniciadaEm).getTime())
+            ? parsedLegado.iniciadaEm
+            : new Date().toISOString(),
+        kmInicial: parsedLegado.kmInicio,
+        segundosInicial: Math.floor(parsedLegado.tempoInicioSegundos),
+      };
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
-export function salvarEntregaEmAndamento(
-  entrega: EntregaEmAndamento | null
-): void {
+export function salvarEntregaAtual(entrega: EntregaAtual | null): void {
   try {
     if (!entrega) {
-      localStorage.removeItem(KEY_ENTREGA_ATIVA);
+      localStorage.removeItem(KEY_ENTREGA_ATUAL);
+      localStorage.removeItem(KEY_ENTREGA_ATIVA_LEGADO);
     } else {
-      localStorage.setItem(KEY_ENTREGA_ATIVA, JSON.stringify(entrega));
+      localStorage.setItem(KEY_ENTREGA_ATUAL, JSON.stringify(entrega));
+      localStorage.removeItem(KEY_ENTREGA_ATIVA_LEGADO);
     }
   } catch {
     // Ignore storage errors
+  }
+}
+
+export function carregarEntregaEmAndamento(): EntregaEmAndamento | null {
+  const atual = carregarEntregaAtual();
+  if (!atual) return null;
+  return {
+    ativa: true,
+    kmInicio: atual.kmInicial,
+    tempoInicioSegundos: atual.segundosInicial,
+    iniciadaEm: atual.inicioIso,
+  };
+}
+
+export function salvarEntregaEmAndamento(
+  entrega: EntregaEmAndamento | null
+): void {
+  if (!entrega) {
+    salvarEntregaAtual(null);
+  } else {
+    salvarEntregaAtual({
+      inicioIso: entrega.iniciadaEm,
+      kmInicial: entrega.kmInicio,
+      segundosInicial: entrega.tempoInicioSegundos,
+    });
   }
 }
 
@@ -531,13 +661,24 @@ export interface BackupRota {
   percentualReserva?: number;
   configOleo?: ConfigTrocaOleo;
   vencimentos?: Vencimento[];
+  entregas?: Entrega[];
   lancamentos: Lancamento[];
   trajetos: Trajeto[];
 }
 
+function formatarDuracaoCsv(segundos: number): string {
+  const safe = Number.isFinite(segundos) && segundos > 0 ? Math.floor(segundos) : 0;
+  const h = Math.floor(safe / 3600);
+  const m = Math.floor((safe % 3600) / 60);
+  const s = safe % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
 export function gerarConteudoCsv(
   lancamentos: Lancamento[],
-  trajetos: Trajeto[]
+  trajetos: Trajeto[],
+  entregas: Entrega[] = []
 ): string {
   const escapar = (v: string) => `"${v.replace(/"/g, '""')}"`;
   const linhas: string[] = [
@@ -560,6 +701,24 @@ export function gerarConteudoCsv(
           ? String(obterEntregasLancamento(item))
           : '',
         escapar(item.observacao ?? ''),
+      ].join(';')
+    );
+  }
+
+  for (const entrega of entregas) {
+    const dataFormatada = new Date(entrega.fimIso).toLocaleString('pt-BR');
+    linhas.push(
+      [
+        'Entrega',
+        escapar(dataFormatada),
+        'Entrega',
+        escapar(entrega.plataforma ?? ''),
+        typeof entrega.valor === 'number' && entrega.valor > 0
+          ? entrega.valor.toFixed(2).replace('.', ',')
+          : '',
+        entrega.km.toFixed(2).replace('.', ','),
+        '1',
+        escapar(`Duração: ${formatarDuracaoCsv(entrega.duracaoSegundos)}`),
       ].join(';')
     );
   }
@@ -672,6 +831,10 @@ export function validarEConverterBackupJson(texto: string): BackupRota | null {
       ? sanitizarVencimentos(parsed.vencimentos)
       : undefined;
 
+    const entregas = Array.isArray(parsed.entregas)
+      ? sanitizarEntregas(parsed.entregas)
+      : undefined;
+
     return {
       versao: 1,
       exportadoEm:
@@ -687,6 +850,7 @@ export function validarEConverterBackupJson(texto: string): BackupRota | null {
       percentualReserva,
       configOleo,
       vencimentos,
+      entregas,
       lancamentos: lancamentosValidos,
       trajetos: trajetosValidos,
     };

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Entrega,
   Lancamento,
   PLATAFORMAS,
   Plataforma,
@@ -8,45 +9,52 @@ import {
 } from '../types';
 import {
   formatarDuracao,
+  formatarDuracaoCurta,
   formatarKm,
-  formatarMoeda,
   parseValorNumerico,
   rotuloCategoria,
 } from '../utils/formatters';
 import { calcularDistanciaHaversineKm, Coordenada } from '../utils/geo';
 import {
-  EntregaEmAndamento,
-  carregarEntregaEmAndamento,
+  EntregaAtual,
+  carregarEntregaAtual,
   carregarKmEmAndamento,
+  carregarModoMovimento,
   carregarTempoOdometroSegundos,
   carregarUltimoKmPainel,
-  salvarEntregaEmAndamento,
+  salvarEntregaAtual,
   salvarKmEmAndamento,
   salvarTempoOdometroSegundos,
   salvarUltimoKmPainel,
 } from '../utils/storage';
 
+export interface DadosEntregaFinalizada {
+  inicioIso: string;
+  fimIso: string;
+  km: number;
+  duracaoSegundos: number;
+  valor?: number;
+  plataforma?: Plataforma;
+}
+
 interface OdometroProps {
   oculto?: boolean;
   lancamentos?: Lancamento[];
+  entregas?: Entrega[];
+  triggerFinalizarSeq?: number;
   onSalvarTrajeto: (
     km: number,
     origem: 'gps' | 'manual',
     duracaoSegundos?: number
   ) => void;
-  onFinalizarEntrega?: (dados: {
-    valor: number;
-    categoria: Plataforma;
-    kmEntrega?: number;
-    duracaoEntregaSegundos?: number;
-    observacao?: string;
-  }) => void;
+  onFinalizarEntrega?: (dados: DadosEntregaFinalizada) => void;
   onStatusChange?: (info: {
     status: StatusOdometro;
     km: number;
     tempoSegundos: number;
     entregaAtiva: boolean;
     kmEntregaAtual: number;
+    velocidadeKmh: number | null;
   }) => void;
 }
 
@@ -161,6 +169,8 @@ function traduzirErroGeolocalizacao(
 export const Odometro: React.FC<OdometroProps> = ({
   oculto = false,
   lancamentos = [],
+  entregas = [],
+  triggerFinalizarSeq = 0,
   onSalvarTrajeto,
   onFinalizarEntrega,
   onStatusChange,
@@ -169,22 +179,37 @@ export const Odometro: React.FC<OdometroProps> = ({
   const [tempoSegundos, setTempoSegundos] = useState<number>(() =>
     carregarTempoOdometroSegundos()
   );
+  const [entregaAtiva, setEntregaAtiva] = useState<EntregaAtual | null>(() =>
+    carregarEntregaAtual()
+  );
   const [status, setStatus] = useState<StatusOdometro>(() =>
-    carregarKmEmAndamento() > 0 || carregarTempoOdometroSegundos() > 0
+    carregarKmEmAndamento() > 0 ||
+    carregarTempoOdometroSegundos() > 0 ||
+    carregarEntregaAtual() !== null
       ? 'paused'
       : 'idle'
-  );
-  const [entregaAtiva, setEntregaAtiva] = useState<EntregaEmAndamento | null>(
-    () => carregarEntregaEmAndamento()
   );
 
   const [sheetAberto, setSheetAberto] = useState<boolean>(false);
   const [modalEntregaAberto, setModalEntregaAberto] = useState<boolean>(false);
+  const [finalizandoSnapshot, setFinalizandoSnapshot] = useState<{
+    inicioIso: string;
+    fimIso: string;
+    km: number;
+    duracaoSegundos: number;
+  } | null>(null);
+  const [aguardandoParada, setAguardandoParada] = useState<{
+    inicioIso: string;
+    fimIso: string;
+    km: number;
+    duracaoSegundos: number;
+  } | null>(null);
+  const [confirmarCancelarEntrega, setConfirmarCancelarEntrega] =
+    useState<boolean>(false);
   const [entregaPlataforma, setEntregaPlataforma] = useState<Plataforma>(
     Plataforma.IFOOD
   );
   const [entregaValorTexto, setEntregaValorTexto] = useState<string>('');
-  const [entregaObs, setEntregaObs] = useState<string>('');
   const [erroEntrega, setErroEntrega] = useState<string | null>(null);
   const [avisoTrajeto, setAvisoTrajeto] = useState<string | null>(null);
 
@@ -209,26 +234,47 @@ export const Odometro: React.FC<OdometroProps> = ({
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const statusRef = useRef<StatusOdometro>(status);
   const kmAtualRef = useRef<number>(kmAtual);
+  const ultimoTriggerSeqRef = useRef<number>(triggerFinalizarSeq);
 
-  const plataformasOrdenadas = useMemo(() => {
-    const contagem = new Map<string, number>();
+  const ultimaPlataformaUsada = useMemo<Plataforma>(() => {
+    let melhorPlat: Plataforma = Plataforma.IFOOD;
+    let melhorTempo = -1;
+
     for (const item of lancamentos) {
       if (item.tipo === TipoLancamento.GANHO) {
-        contagem.set(item.categoria, (contagem.get(item.categoria) ?? 0) + 1);
+        const t = new Date(item.data).getTime();
+        if (
+          !Number.isNaN(t) &&
+          t > melhorTempo &&
+          PLATAFORMAS.includes(item.categoria as Plataforma)
+        ) {
+          melhorTempo = t;
+          melhorPlat = item.categoria as Plataforma;
+        }
       }
     }
-    return [...PLATAFORMAS].sort((a, b) => {
-      const diff = (contagem.get(b) ?? 0) - (contagem.get(a) ?? 0);
-      if (diff !== 0) return diff;
-      return PLATAFORMAS.indexOf(a) - PLATAFORMAS.indexOf(b);
-    });
-  }, [lancamentos]);
+
+    for (const ent of entregas) {
+      if (
+        ent.plataforma &&
+        PLATAFORMAS.includes(ent.plataforma as Plataforma)
+      ) {
+        const t = new Date(ent.fimIso).getTime();
+        if (!Number.isNaN(t) && t > melhorTempo) {
+          melhorTempo = t;
+          melhorPlat = ent.plataforma as Plataforma;
+        }
+      }
+    }
+
+    return melhorPlat;
+  }, [lancamentos, entregas]);
 
   const kmEntregaAtual = entregaAtiva
-    ? Math.max(0, kmAtual - entregaAtiva.kmInicio)
+    ? Math.max(0, Number((kmAtual - entregaAtiva.kmInicial).toFixed(2)))
     : 0;
   const tempoEntregaAtual = entregaAtiva
-    ? Math.max(0, tempoSegundos - entregaAtiva.tempoInicioSegundos)
+    ? Math.max(0, Math.floor(tempoSegundos - entregaAtiva.segundosInicial))
     : 0;
 
   useEffect(() => {
@@ -245,7 +291,7 @@ export const Odometro: React.FC<OdometroProps> = ({
   }, [tempoSegundos]);
 
   useEffect(() => {
-    salvarEntregaEmAndamento(entregaAtiva);
+    salvarEntregaAtual(entregaAtiva);
   }, [entregaAtiva]);
 
   useEffect(() => {
@@ -255,8 +301,17 @@ export const Odometro: React.FC<OdometroProps> = ({
       tempoSegundos,
       entregaAtiva: Boolean(entregaAtiva),
       kmEntregaAtual,
+      velocidadeKmh,
     });
-  }, [status, kmAtual, tempoSegundos, entregaAtiva, kmEntregaAtual, onStatusChange]);
+  }, [
+    status,
+    kmAtual,
+    tempoSegundos,
+    entregaAtiva,
+    kmEntregaAtual,
+    velocidadeKmh,
+    onStatusChange,
+  ]);
 
   useEffect(() => {
     if (status !== 'running') return;
@@ -471,69 +526,146 @@ export const Odometro: React.FC<OdometroProps> = ({
   };
 
   const handleIniciarEntrega = () => {
+    if (status !== 'running') return;
     setAvisoTrajeto(null);
-    if (status !== 'running') {
-      iniciarWatchGps();
-      void solicitarWakeLock();
-    }
+    setConfirmarCancelarEntrega(false);
     setEntregaAtiva({
-      ativa: true,
-      kmInicio: kmAtual,
-      tempoInicioSegundos: tempoSegundos,
-      iniciadaEm: new Date().toISOString(),
+      inicioIso: new Date().toISOString(),
+      kmInicial: kmAtual,
+      segundosInicial: tempoSegundos,
     });
   };
 
-  const handleAbrirModalEntrega = () => {
-    setAvisoTrajeto(null);
-    setEntregaPlataforma(plataformasOrdenadas[0] ?? Plataforma.IFOOD);
-    setEntregaValorTexto('');
-    setEntregaObs('');
-    setErroEntrega(null);
-    setModalEntregaAberto(true);
-  };
+  const abrirSheetEntregaFinalizada = useCallback(
+    (snapshot: {
+      inicioIso: string;
+      fimIso: string;
+      km: number;
+      duracaoSegundos: number;
+    }) => {
+      setAvisoTrajeto(null);
+      setConfirmarCancelarEntrega(false);
+      setFinalizandoSnapshot(snapshot);
+      setEntregaPlataforma(ultimaPlataformaUsada);
+      setEntregaValorTexto('');
+      setErroEntrega(null);
+      setModalEntregaAberto(true);
+    },
+    [ultimaPlataformaUsada]
+  );
+
+  const handleAbrirModalEntrega = useCallback(() => {
+    if (!entregaAtiva) return;
+    const snapshot = {
+      inicioIso: entregaAtiva.inicioIso,
+      fimIso: new Date().toISOString(),
+      km: Math.max(0, Number((kmAtual - entregaAtiva.kmInicial).toFixed(2))),
+      duracaoSegundos: Math.max(
+        0,
+        Math.floor(tempoSegundos - entregaAtiva.segundosInicial)
+      ),
+    };
+
+    const emMovimento =
+      carregarModoMovimento() &&
+      status === 'running' &&
+      velocidadeKmh !== null &&
+      velocidadeKmh >= 15;
+
+    if (emMovimento) {
+      setAguardandoParada(snapshot);
+      setConfirmarCancelarEntrega(false);
+      return;
+    }
+
+    abrirSheetEntregaFinalizada(snapshot);
+  }, [
+    entregaAtiva,
+    kmAtual,
+    tempoSegundos,
+    status,
+    velocidadeKmh,
+    abrirSheetEntregaFinalizada,
+  ]);
+
+  useEffect(() => {
+    if (!aguardandoParada) return;
+    const parou =
+      status !== 'running' || velocidadeKmh === null || velocidadeKmh < 12;
+    if (parou) {
+      const snap = aguardandoParada;
+      setAguardandoParada(null);
+      abrirSheetEntregaFinalizada(snap);
+    }
+  }, [aguardandoParada, status, velocidadeKmh, abrirSheetEntregaFinalizada]);
+
+  useEffect(() => {
+    if (triggerFinalizarSeq !== ultimoTriggerSeqRef.current) {
+      ultimoTriggerSeqRef.current = triggerFinalizarSeq;
+      if (triggerFinalizarSeq > 0) {
+        handleAbrirModalEntrega();
+      }
+    }
+  }, [triggerFinalizarSeq, handleAbrirModalEntrega]);
 
   const handleCancelarEntrega = () => {
     setEntregaAtiva(null);
+    setAguardandoParada(null);
+    setFinalizandoSnapshot(null);
     setModalEntregaAberto(false);
+    setConfirmarCancelarEntrega(false);
     setErroEntrega(null);
     setAvisoTrajeto(null);
   };
 
   const handleConfirmarEntrega = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!finalizandoSnapshot) return;
     setErroEntrega(null);
 
     const valor = parseValorNumerico(entregaValorTexto);
     if (Number.isNaN(valor) || valor <= 0) {
-      setErroEntrega('Informe o valor da entrega maior que R$ 0,00.');
+      setErroEntrega('Informe quanto pagou (maior que R$ 0,00).');
       return;
     }
 
-    const kmParaSalvar = Number(kmEntregaAtual.toFixed(2));
-    const duracaoParaSalvar = Math.max(0, Math.floor(tempoEntregaAtual));
-
     onFinalizarEntrega?.({
+      inicioIso: finalizandoSnapshot.inicioIso,
+      fimIso: finalizandoSnapshot.fimIso,
+      km: finalizandoSnapshot.km,
+      duracaoSegundos: finalizandoSnapshot.duracaoSegundos,
       valor: Number(valor.toFixed(2)),
-      categoria: entregaPlataforma,
-      kmEntrega: kmParaSalvar > 0 ? kmParaSalvar : undefined,
-      duracaoEntregaSegundos:
-        duracaoParaSalvar > 0 ? duracaoParaSalvar : undefined,
-      observacao: entregaObs.trim() || undefined,
+      plataforma: entregaPlataforma,
     });
 
     setEntregaAtiva(null);
+    setAguardandoParada(null);
+    setFinalizandoSnapshot(null);
     setModalEntregaAberto(false);
     setEntregaValorTexto('');
-    setEntregaObs('');
-    mostrarFeedback(`${formatarMoeda(valor)} salvo!`);
+  };
+
+  const handlePularValorEntrega = () => {
+    if (!finalizandoSnapshot) return;
+    onFinalizarEntrega?.({
+      inicioIso: finalizandoSnapshot.inicioIso,
+      fimIso: finalizandoSnapshot.fimIso,
+      km: finalizandoSnapshot.km,
+      duracaoSegundos: finalizandoSnapshot.duracaoSegundos,
+    });
+
+    setEntregaAtiva(null);
+    setAguardandoParada(null);
+    setFinalizandoSnapshot(null);
+    setModalEntregaAberto(false);
+    setEntregaValorTexto('');
   };
 
   const handleSalvarTrajetoGps = () => {
     if (kmAtual <= 0) return;
     if (entregaAtiva) {
       setAvisoTrajeto(
-        'Finalize ou cancele a entrega em andamento antes de encerrar o turno.'
+        'Finalize ou cancele a entrega antes de encerrar o turno.'
       );
       return;
     }
@@ -562,7 +694,10 @@ export const Odometro: React.FC<OdometroProps> = ({
     setKmAtual(0);
     setTempoSegundos(0);
     setEntregaAtiva(null);
+    setAguardandoParada(null);
+    setFinalizandoSnapshot(null);
     setModalEntregaAberto(false);
+    setConfirmarCancelarEntrega(false);
     setAvisoTrajeto(null);
     setPrecisaoMetros(null);
     setVelocidadeKmh(null);
@@ -616,25 +751,22 @@ export const Odometro: React.FC<OdometroProps> = ({
     setSheetAberto(false);
   };
 
-  const rotuloTopoOdometro =
-    status === 'running'
-      ? 'Odômetro · rodando'
-      : status === 'paused'
-        ? 'Odômetro · pausado'
-        : 'Odômetro · parado';
+  const rotuloTopoOdometro = 'Odômetro · total do turno';
 
   const kmFormatadoCasinhas = Math.max(0, kmAtual).toFixed(1);
   const [parteInteiraRaw, parteDecimal = '0'] = kmFormatadoCasinhas.split('.');
   const digitosInteiros = parteInteiraRaw.padStart(4, '0').split('');
 
   const subtituloFaixa =
-    status === 'idle' && tempoSegundos === 0
-      ? '00:00:00 em rota · Toque para detalhes'
-      : `${formatarDuracao(tempoSegundos)} em rota${
-          status === 'running' && velocidadeKmh !== null && velocidadeKmh > 0
+    status === 'running'
+      ? `${aguardandoSinal ? 'Buscando GPS' : 'Rodando'} · ${formatarDuracao(tempoSegundos)}${
+          velocidadeKmh !== null && velocidadeKmh > 0
             ? ` · ${velocidadeKmh} km/h`
             : ''
-        }`;
+        }`
+      : status === 'paused'
+        ? `Pausado · ${formatarDuracao(tempoSegundos)}`
+        : 'Parado · Toque para detalhes';
 
   const textoStatusSheet =
     status === 'running'
@@ -645,13 +777,15 @@ export const Odometro: React.FC<OdometroProps> = ({
         ? 'Pausado'
         : 'Pronto para rodar';
 
+  const podeIniciarEntrega = status === 'running';
+
   return (
     <>
       {/* Cartão compacto com visual de hodômetro mecânico na aba Hoje */}
       {!oculto && (
         <div
           onClick={() => setSheetAberto(true)}
-          className="rota-card cursor-pointer px-3.5 sm:px-4 py-2.5 space-y-2"
+          className="rota-card cursor-pointer px-3.5 sm:px-4 py-3 space-y-2.5"
         >
           <div className="flex items-center justify-between gap-2.5">
             <button
@@ -714,50 +848,94 @@ export const Odometro: React.FC<OdometroProps> = ({
             </button>
           </div>
 
-          <div className="flex items-center justify-between gap-2.5 border-t border-[var(--rota-line)] pt-2">
+          <div
+            className="border-t border-[var(--rota-line)] pt-2.5 space-y-2"
+            onClick={(e) => e.stopPropagation()}
+          >
             {entregaAtiva ? (
               <>
-                <div className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] leading-[18px] font-extrabold text-[var(--rota-success)] tabular-nums">
-                    Em entrega · {formatarKm(kmEntregaAtual)} km
-                  </span>
-                  <span className="block truncate text-[13px] leading-[18px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
-                    {formatarDuracao(tempoEntregaAtual)}
+                <div className="flex items-center justify-between gap-3 rounded-[14px] bg-[var(--rota-accent-tint)] px-3.5 py-2.5">
+                  <div className="min-w-0">
+                    <span className="block text-[13px] leading-[18px] font-bold text-[var(--rota-accent)]">
+                      Entrega atual
+                    </span>
+                    <span className="block text-[22px] leading-[26px] font-extrabold text-[var(--rota-text)] tabular-nums">
+                      {formatarKm(kmEntregaAtual)} km
+                    </span>
+                  </div>
+                  <span className="shrink-0 text-[13px] font-extrabold text-[var(--rota-accent)] tabular-nums">
+                    {formatarDuracaoCurta(tempoEntregaAtual)} em entrega
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleAbrirModalEntrega();
-                  }}
-                  className="inline-flex h-[48px] shrink-0 items-center justify-center rounded-[14px] bg-[var(--rota-accent)] px-3.5 text-[13px] font-extrabold text-[var(--rota-on-accent)] whitespace-nowrap active:scale-[0.98]"
-                >
-                  Finalizar entrega
-                </button>
+
+                {aguardandoParada ? (
+                  <p className="rounded-[12px] bg-[var(--rota-success-tint)] px-3 py-2 text-center text-[13px] font-bold text-[var(--rota-success)]">
+                    Entrega registrada ({formatarKm(aguardandoParada.km)} km) ·
+                    Aguardando parar para lançar valor
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleAbrirModalEntrega}
+                    className="flex h-[52px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-success)] px-4 text-[15px] font-extrabold text-[var(--rota-on-success)] active:scale-[0.98]"
+                  >
+                    Finalizar entrega
+                  </button>
+                )}
+
+                {!confirmarCancelarEntrega ? (
+                  <div className="flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmarCancelarEntrega(true)}
+                      className="inline-flex min-h-[48px] items-center justify-center rounded-[12px] px-4 text-[13px] font-bold text-[var(--rota-text-soft)] hover:text-[var(--rota-danger)] active:scale-[0.98]"
+                    >
+                      Cancelar entrega
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2 rounded-[14px] bg-[var(--rota-danger-tint)] px-3 py-1.5">
+                    <span className="text-[13px] font-bold text-[var(--rota-danger)]">
+                      Descartar entrega?
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmarCancelarEntrega(false)}
+                        className="inline-flex h-[48px] items-center justify-center rounded-[12px] bg-[var(--rota-surface)] px-3 text-[13px] font-bold text-[var(--rota-text)] active:scale-[0.98]"
+                      >
+                        Voltar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelarEntrega}
+                        className="inline-flex h-[48px] items-center justify-center rounded-[12px] bg-[var(--rota-danger)] px-3 text-[13px] font-extrabold text-white active:scale-[0.98]"
+                      >
+                        Sim, cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <>
-                <div className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] leading-[18px] font-bold text-[var(--rota-text)]">
-                    Recorte por entrega
-                  </span>
-                  <span className="block truncate text-[13px] leading-[18px] font-semibold text-[var(--rota-text-soft)]">
-                    {status === 'running'
-                      ? 'Em deslocamento'
-                      : 'Toque ao pegar o pedido'}
-                  </span>
-                </div>
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleIniciarEntrega();
-                  }}
-                  className="inline-flex h-[48px] shrink-0 items-center justify-center rounded-[14px] bg-[var(--rota-accent-tint)] px-3.5 text-[13px] font-extrabold text-[var(--rota-accent)] whitespace-nowrap active:scale-[0.98]"
+                  disabled={!podeIniciarEntrega}
+                  onClick={handleIniciarEntrega}
+                  className={`flex h-[52px] w-full items-center justify-center rounded-[14px] px-4 text-[15px] font-extrabold transition-colors active:scale-[0.98] ${
+                    podeIniciarEntrega
+                      ? 'bg-[var(--rota-accent)] text-[var(--rota-on-accent)]'
+                      : 'cursor-not-allowed bg-[var(--rota-surface-2)] text-[var(--rota-text-soft)] opacity-55'
+                  }`}
                 >
                   Iniciar entrega
                 </button>
+                {!podeIniciarEntrega && (
+                  <p className="text-center text-[13px] font-semibold text-[var(--rota-text-soft)]">
+                    Ligue o odômetro para iniciar
+                  </p>
+                )}
               </>
             )}
           </div>
@@ -910,51 +1088,85 @@ export const Odometro: React.FC<OdometroProps> = ({
               )}
 
               {/* Corte de entrega sem parar o odômetro */}
-              {status !== 'idle' && (
-                <div className="pt-2 border-t border-[var(--rota-line)]">
-                  {entregaAtiva ? (
-                    <div className="space-y-2.5">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <span className="block text-[14px] font-extrabold text-[var(--rota-text)]">
-                            Entrega em andamento
-                          </span>
-                          <span className="block text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
-                            {formatarDuracao(tempoEntregaAtual)}
-                          </span>
-                        </div>
-                        <span className="text-[18px] font-extrabold text-[var(--rota-success)] tabular-nums">
+              <div className="pt-2 border-t border-[var(--rota-line)] space-y-2">
+                {entregaAtiva ? (
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between gap-3 rounded-[14px] bg-[var(--rota-accent-tint)] px-3.5 py-2.5">
+                      <div>
+                        <span className="block text-[13px] font-bold text-[var(--rota-accent)]">
+                          Entrega atual
+                        </span>
+                        <span className="block text-[22px] font-extrabold text-[var(--rota-text)] tabular-nums">
                           {formatarKm(kmEntregaAtual)} km
                         </span>
                       </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={handleAbrirModalEntrega}
-                          className="flex min-h-[48px] flex-1 items-center justify-center rounded-[14px] bg-[var(--rota-accent)] px-4 text-[14px] font-extrabold text-[var(--rota-on-accent)] active:scale-[0.98]"
-                        >
-                          Finalizar entrega
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleCancelarEntrega}
-                          className="flex min-h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-surface-2)] px-4 text-[14px] font-bold text-[var(--rota-text-soft)] active:scale-[0.98]"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
+                      <span className="text-[13px] font-extrabold text-[var(--rota-accent)] tabular-nums">
+                        {formatarDuracaoCurta(tempoEntregaAtual)} em entrega
+                      </span>
                     </div>
-                  ) : (
                     <button
                       type="button"
+                      onClick={handleAbrirModalEntrega}
+                      className="flex h-[52px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-success)] px-4 text-[15px] font-extrabold text-[var(--rota-on-success)] active:scale-[0.98]"
+                    >
+                      Finalizar entrega
+                    </button>
+                    {!confirmarCancelarEntrega ? (
+                      <div className="flex justify-center">
+                        <button
+                          type="button"
+                          onClick={() => setConfirmarCancelarEntrega(true)}
+                          className="inline-flex min-h-[48px] items-center justify-center rounded-[12px] px-4 text-[13px] font-bold text-[var(--rota-text-soft)] hover:text-[var(--rota-danger)]"
+                        >
+                          Cancelar entrega
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2 rounded-[14px] bg-[var(--rota-danger-tint)] px-3 py-1.5">
+                        <span className="text-[13px] font-bold text-[var(--rota-danger)]">
+                          Descartar entrega?
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setConfirmarCancelarEntrega(false)}
+                            className="inline-flex h-[48px] items-center justify-center rounded-[12px] bg-[var(--rota-surface)] px-3 text-[13px] font-bold text-[var(--rota-text)]"
+                          >
+                            Voltar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelarEntrega}
+                            className="inline-flex h-[48px] items-center justify-center rounded-[12px] bg-[var(--rota-danger)] px-3 text-[13px] font-extrabold text-white"
+                          >
+                            Sim, cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      disabled={!podeIniciarEntrega}
                       onClick={handleIniciarEntrega}
-                      className="flex min-h-[48px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-accent-tint)] px-4 text-[14px] font-extrabold text-[var(--rota-accent)] active:scale-[0.98]"
+                      className={`flex h-[52px] w-full items-center justify-center rounded-[14px] px-4 text-[15px] font-extrabold active:scale-[0.98] ${
+                        podeIniciarEntrega
+                          ? 'bg-[var(--rota-accent)] text-[var(--rota-on-accent)]'
+                          : 'cursor-not-allowed bg-[var(--rota-surface-2)] text-[var(--rota-text-soft)] opacity-55'
+                      }`}
                     >
                       Iniciar entrega
                     </button>
-                  )}
-                </div>
-              )}
+                    {!podeIniciarEntrega && (
+                      <p className="text-center text-[13px] font-semibold text-[var(--rota-text-soft)]">
+                        Ligue o odômetro para iniciar
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Modo manual (Distância ou Painel) */}
@@ -1107,72 +1319,48 @@ export const Odometro: React.FC<OdometroProps> = ({
         </div>
       )}
 
-      {/* Modal para finalizar entrega sem parar o odômetro */}
-      {modalEntregaAberto && (
+      {/* Bottom sheet "Entrega finalizada" */}
+      {modalEntregaAberto && finalizandoSnapshot && (
         <div
-          className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4"
+          className="fixed inset-0 z-[60] flex flex-col justify-end sm:items-center sm:justify-center"
           style={{ backgroundColor: 'var(--rota-backdrop)' }}
           role="dialog"
           aria-modal="true"
           aria-labelledby="titulo-finalizar-entrega"
         >
-          <div className="rota-card w-full max-w-[420px] p-5 space-y-3">
+          <div className="max-h-[92dvh] w-full sm:max-w-[460px] overflow-y-auto rounded-t-[20px] sm:rounded-[20px] bg-[var(--rota-bg)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <h3
-                id="titulo-finalizar-entrega"
-                className="text-[18px] font-extrabold text-[var(--rota-text)]"
-              >
-                Finalizar entrega
-              </h3>
+              <div>
+                <h3
+                  id="titulo-finalizar-entrega"
+                  className="text-[20px] font-extrabold text-[var(--rota-text)]"
+                >
+                  Entrega finalizada
+                </h3>
+                <p className="text-[13px] font-bold text-[var(--rota-text-soft)] tabular-nums">
+                  {formatarKm(finalizandoSnapshot.km)} km ·{' '}
+                  {formatarDuracaoCurta(finalizandoSnapshot.duracaoSegundos)}
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setModalEntregaAberto(false)}
-                className="inline-flex min-h-[48px] items-center px-2 text-[14px] font-bold text-[var(--rota-text-soft)]"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-[14px] px-3 text-[15px] font-bold text-[var(--rota-text-soft)] hover:text-[var(--rota-text)]"
               >
                 Fechar
               </button>
             </div>
 
-            <div className="flex items-center justify-between rounded-[14px] bg-[var(--rota-surface-2)] px-4 py-3 tabular-nums">
-              <span className="text-[14px] font-extrabold text-[var(--rota-text)]">
-                {formatarKm(kmEntregaAtual)} km
-              </span>
-              <span className="text-[13px] font-bold text-[var(--rota-text-soft)]">
-                {formatarDuracao(tempoEntregaAtual)}
-              </span>
-            </div>
-
             <form onSubmit={handleConfirmarEntrega} className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                {plataformasOrdenadas.map((plat) => {
-                  const ativo = entregaPlataforma === plat;
-                  return (
-                    <button
-                      key={plat}
-                      type="button"
-                      aria-pressed={ativo}
-                      onClick={() => setEntregaPlataforma(plat)}
-                      className={`h-[48px] rounded-[14px] border-2 px-3 text-[14px] font-extrabold truncate transition-colors ${
-                        ativo
-                          ? 'bg-[var(--rota-accent-tint)] border-[var(--rota-accent)] text-[var(--rota-accent)]'
-                          : 'bg-[var(--rota-surface-2)] border-transparent text-[var(--rota-text)]'
-                      }`}
-                    >
-                      {rotuloCategoria(plat)}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div>
+              <div className="rota-card p-4 text-center">
                 <label
                   htmlFor="input-valor-entrega-odometro"
-                  className="mb-1 block text-[13px] font-bold text-[var(--rota-text-soft)]"
+                  className="block text-[13px] font-bold text-[var(--rota-text-soft)]"
                 >
-                  Valor da entrega
+                  Quanto pagou?
                 </label>
-                <div className="rota-input flex h-[52px] items-center px-3.5">
-                  <span className="mr-2 text-[16px] font-extrabold text-[var(--rota-text-soft)]">
+                <div className="mt-1.5 flex items-baseline justify-center gap-1.5">
+                  <span className="text-[20px] font-extrabold text-[var(--rota-text-soft)]">
                     R$
                   </span>
                   <input
@@ -1186,42 +1374,60 @@ export const Odometro: React.FC<OdometroProps> = ({
                       if (erroEntrega) setErroEntrega(null);
                     }}
                     placeholder="0,00"
-                    className="w-full bg-transparent text-[20px] font-extrabold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/50 focus:outline-none tabular-nums"
+                    className="w-[180px] bg-transparent text-center text-[40px] leading-none font-extrabold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)]/40 focus:outline-none tabular-nums"
                   />
                 </div>
                 {erroEntrega && (
-                  <p className="mt-1.5 text-[13px] font-bold text-[var(--rota-danger)]">
+                  <p
+                    role="alert"
+                    className="mt-2 text-[13px] font-bold text-[var(--rota-danger)]"
+                  >
                     {erroEntrega}
                   </p>
                 )}
               </div>
 
               <div>
-                <label
-                  htmlFor="input-obs-entrega-odometro"
-                  className="mb-1 block text-[13px] font-bold text-[var(--rota-text-soft)]"
-                >
-                  Observação (opcional)
-                </label>
-                <div className="rota-input flex h-[48px] items-center px-3.5">
-                  <input
-                    id="input-obs-entrega-odometro"
-                    type="text"
-                    maxLength={80}
-                    value={entregaObs}
-                    onChange={(e) => setEntregaObs(e.target.value)}
-                    placeholder="Ex: gorjeta, taxa extra"
-                    className="w-full bg-transparent text-[14px] font-semibold text-[var(--rota-text)] placeholder:text-[var(--rota-text-soft)] focus:outline-none"
-                  />
+                <span className="mb-1.5 block text-[13px] font-bold text-[var(--rota-text-soft)]">
+                  Plataforma
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  {PLATAFORMAS.map((plat) => {
+                    const ativo = entregaPlataforma === plat;
+                    return (
+                      <button
+                        key={plat}
+                        type="button"
+                        aria-pressed={ativo}
+                        onClick={() => setEntregaPlataforma(plat)}
+                        className={`h-[48px] rounded-[14px] border-2 px-3 text-[14px] font-extrabold truncate transition-colors ${
+                          ativo
+                            ? 'bg-[var(--rota-accent-tint)] border-[var(--rota-accent)] text-[var(--rota-accent)]'
+                            : 'bg-[var(--rota-surface)] border-[var(--rota-line)] text-[var(--rota-text)]'
+                        }`}
+                      >
+                        {rotuloCategoria(plat)}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              <button
-                type="submit"
-                className="flex h-[56px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-accent)] text-[15px] font-extrabold text-[var(--rota-on-accent)] active:scale-[0.98]"
-              >
-                Salvar entrega
-              </button>
+              <div className="grid grid-cols-2 gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={handlePularValorEntrega}
+                  className="flex h-[52px] items-center justify-center rounded-[14px] bg-[var(--rota-surface-2)] px-4 text-[15px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
+                >
+                  Pular valor
+                </button>
+                <button
+                  type="submit"
+                  className="flex h-[52px] items-center justify-center rounded-[14px] bg-[var(--rota-accent)] px-4 text-[15px] font-extrabold text-[var(--rota-on-accent)] active:scale-[0.98]"
+                >
+                  Salvar
+                </button>
+              </div>
             </form>
           </div>
         </div>

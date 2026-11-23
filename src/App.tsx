@@ -3,11 +3,12 @@ import { BarChart3, Clock, Home, SlidersHorizontal } from 'lucide-react';
 import { FormLancamento } from './components/FormLancamento';
 import { ListaLancamentos } from './components/ListaLancamentos';
 import { ManutencaoBackup } from './components/ManutencaoBackup';
-import { Odometro } from './components/Odometro';
+import { Odometro, DadosEntregaFinalizada } from './components/Odometro';
 import { Resumo } from './components/Resumo';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import {
   CategoriaGasto,
+  Entrega,
   FiltroPeriodo,
   Lancamento,
   Plataforma,
@@ -17,6 +18,7 @@ import {
   Vencimento,
 } from './types';
 import {
+  filtrarEntregasPorPeriodo,
   filtrarPorPeriodo,
   formatarKm,
   formatarMoeda,
@@ -25,10 +27,13 @@ import {
 import {
   ConfigTrocaOleo,
   PreferenciaTema,
+  carregarAltoContraste,
   carregarConfigOleo,
+  carregarEntregas,
   carregarLancamentos,
   carregarMetaDiaria,
   carregarMinLucroKm,
+  carregarModoMovimento,
   carregarPercentualReserva,
   carregarReservaKm,
   carregarReservaMes,
@@ -37,7 +42,9 @@ import {
   carregarVencimentos,
   gerarId,
   obterEntregasLancamento,
+  salvarAltoContraste,
   salvarConfigOleo,
+  salvarEntregas,
   salvarLancamentos,
   salvarMetaDiaria,
   salvarMinLucroKm,
@@ -64,6 +71,13 @@ type AcaoDesfazer =
       tipo: 'trajeto';
       item: Trajeto;
       rotulo: string;
+    }
+  | {
+      acao: 'adicionado' | 'excluido';
+      tipo: 'entrega';
+      item: Entrega;
+      lancamentoVinculado?: Lancamento;
+      rotulo: string;
     };
 
 function formatarDataPorExtenso(data: Date): string {
@@ -88,12 +102,16 @@ export default function App() {
   const [abaAtiva, setAbaAtiva] = useState<AbaPrincipal>('hoje');
 
   const [tema, setTema] = useState<PreferenciaTema>(() => carregarTema());
+  const [altoContraste, setAltoContraste] = useState<boolean>(() =>
+    carregarAltoContraste()
+  );
   const [lancamentos, setLancamentos] = useState<Lancamento[]>(() =>
     carregarLancamentos()
   );
   const [trajetos, setTrajetos] = useState<Trajeto[]>(() =>
     carregarTrajetos()
   );
+  const [entregas, setEntregas] = useState<Entrega[]>(() => carregarEntregas());
   const [metaDiaria, setMetaDiaria] = useState<number>(() =>
     carregarMetaDiaria()
   );
@@ -113,18 +131,21 @@ export default function App() {
   const [configOleo, setConfigOleo] = useState<ConfigTrocaOleo>(() =>
     carregarConfigOleo()
   );
+  const [triggerFinalizarSeq, setTriggerFinalizarSeq] = useState<number>(0);
   const [odometroInfo, setOdometroInfo] = useState<{
     status: StatusOdometro;
     km: number;
     tempoSegundos: number;
     entregaAtiva: boolean;
     kmEntregaAtual: number;
+    velocidadeKmh: number | null;
   }>({
     status: 'idle',
     km: 0,
     tempoSegundos: 0,
     entregaAtiva: false,
     kmEntregaAtual: 0,
+    velocidadeKmh: null,
   });
 
   const [sheetLancamento, setSheetLancamento] = useState<{
@@ -176,12 +197,24 @@ export default function App() {
   }, [tema]);
 
   useEffect(() => {
+    if (altoContraste) {
+      document.documentElement.setAttribute('data-contrast', 'high');
+    } else {
+      document.documentElement.removeAttribute('data-contrast');
+    }
+  }, [altoContraste]);
+
+  useEffect(() => {
     salvarLancamentos(lancamentos);
   }, [lancamentos]);
 
   useEffect(() => {
     salvarTrajetos(trajetos);
   }, [trajetos]);
+
+  useEffect(() => {
+    salvarEntregas(entregas);
+  }, [entregas]);
 
   useEffect(() => {
     try {
@@ -236,6 +269,24 @@ export default function App() {
       } else {
         setLancamentos((anteriores) => [desfazer.item, ...anteriores]);
       }
+    } else if (desfazer.tipo === 'entrega') {
+      if (desfazer.acao === 'adicionado') {
+        setEntregas((anteriores) =>
+          anteriores.filter((item) => item.id !== desfazer.item.id)
+        );
+        if (desfazer.lancamentoVinculado) {
+          const idVinc = desfazer.lancamentoVinculado.id;
+          setLancamentos((anteriores) =>
+            anteriores.filter((item) => item.id !== idVinc)
+          );
+        }
+      } else {
+        setEntregas((anteriores) => [desfazer.item, ...anteriores]);
+        if (desfazer.lancamentoVinculado) {
+          const lancVinc = desfazer.lancamentoVinculado;
+          setLancamentos((anteriores) => [lancVinc, ...anteriores]);
+        }
+      }
     } else {
       setTrajetos((anteriores) => [desfazer.item, ...anteriores]);
     }
@@ -255,6 +306,11 @@ export default function App() {
   const handleMudarTema = (novoTema: PreferenciaTema) => {
     setTema(novoTema);
     salvarTema(novoTema);
+  };
+
+  const handleMudarAltoContraste = (ativo: boolean) => {
+    setAltoContraste(ativo);
+    salvarAltoContraste(ativo);
   };
 
   const handleMudarMetaDiaria = (novaMeta: number) => {
@@ -303,21 +359,25 @@ export default function App() {
       tempoSegundos: number;
       entregaAtiva: boolean;
       kmEntregaAtual: number;
+      velocidadeKmh: number | null;
     }) => {
       setOdometroInfo(info);
     },
     []
   );
 
-  const handleAdicionarLancamento = (dados: {
-    tipo: TipoLancamento;
-    categoria: Plataforma | CategoriaGasto;
-    valor: number;
-    observacao?: string;
-    kmEntrega?: number;
-    duracaoEntregaSegundos?: number;
-    entregas?: number;
-  }) => {
+  const handleAdicionarLancamento = (
+    dados: {
+      tipo: TipoLancamento;
+      categoria: Plataforma | CategoriaGasto;
+      valor: number;
+      observacao?: string;
+      kmEntrega?: number;
+      duracaoEntregaSegundos?: number;
+      entregas?: number;
+    },
+    opcoes?: { suprimirToast?: boolean }
+  ): Lancamento => {
     const novo: Lancamento = {
       id: gerarId(),
       tipo: dados.tipo,
@@ -336,29 +396,60 @@ export default function App() {
           : undefined,
     };
     setLancamentos((anteriores) => [novo, ...anteriores]);
-    agendarDesfazer({
-      acao: 'adicionado',
-      tipo: 'lancamento',
-      item: novo,
-      rotulo: `${rotuloCategoria(novo.categoria)} (${formatarMoeda(novo.valor)})`,
-    });
+    if (!opcoes?.suprimirToast) {
+      agendarDesfazer({
+        acao: 'adicionado',
+        tipo: 'lancamento',
+        item: novo,
+        rotulo: `${rotuloCategoria(novo.categoria)} (${formatarMoeda(novo.valor)})`,
+      });
+    }
+    return novo;
   };
 
-  const handleFinalizarEntregaOdometro = (dados: {
-    valor: number;
-    categoria: Plataforma;
-    kmEntrega?: number;
-    duracaoEntregaSegundos?: number;
-    observacao?: string;
-  }) => {
-    handleAdicionarLancamento({
-      tipo: TipoLancamento.GANHO,
-      categoria: dados.categoria,
-      valor: dados.valor,
-      observacao: dados.observacao,
-      kmEntrega: dados.kmEntrega,
-      duracaoEntregaSegundos: dados.duracaoEntregaSegundos,
-    });
+  const handleFinalizarEntregaOdometro = (dados: DadosEntregaFinalizada) => {
+    let lancamentoCriado: Lancamento | undefined;
+    if (
+      typeof dados.valor === 'number' &&
+      dados.valor > 0 &&
+      dados.plataforma
+    ) {
+      lancamentoCriado = handleAdicionarLancamento(
+        {
+          tipo: TipoLancamento.GANHO,
+          categoria: dados.plataforma,
+          valor: dados.valor,
+          entregas: 1,
+        },
+        { suprimirToast: true }
+      );
+    }
+
+    const novaEntrega: Entrega = {
+      id: gerarId(),
+      inicioIso: dados.inicioIso,
+      fimIso: dados.fimIso,
+      km: Number(Math.max(0, dados.km).toFixed(2)),
+      duracaoSegundos: Math.max(0, Math.floor(dados.duracaoSegundos)),
+      valor:
+        typeof dados.valor === 'number' && dados.valor > 0
+          ? Number(dados.valor.toFixed(2))
+          : undefined,
+      plataforma: dados.plataforma,
+      lancamentoId: lancamentoCriado?.id,
+    };
+
+    setEntregas((anteriores) => [novaEntrega, ...anteriores]);
+
+    if (lancamentoCriado) {
+      agendarDesfazer({
+        acao: 'adicionado',
+        tipo: 'entrega',
+        item: novaEntrega,
+        lancamentoVinculado: lancamentoCriado,
+        rotulo: `${rotuloCategoria(dados.plataforma!)} (${formatarMoeda(lancamentoCriado.valor)})`,
+      });
+    }
   };
 
   const handleEditarLancamento = (atualizado: Lancamento) => {
@@ -376,6 +467,36 @@ export default function App() {
       tipo: 'lancamento',
       item: encontrado,
       rotulo: `${rotuloCategoria(encontrado.categoria)} (${formatarMoeda(encontrado.valor)})`,
+    });
+  };
+
+  const handleExcluirEntrega = (
+    id: string,
+    excluirLancamentoVinculado: boolean
+  ) => {
+    const encontrada = entregas.find((item) => item.id === id);
+    if (!encontrada) return;
+    setEntregas((anteriores) => anteriores.filter((item) => item.id !== id));
+
+    let lancamentoVinculado: Lancamento | undefined;
+    if (excluirLancamentoVinculado && encontrada.lancamentoId) {
+      lancamentoVinculado = lancamentos.find(
+        (l) => l.id === encontrada.lancamentoId
+      );
+      if (lancamentoVinculado) {
+        const idVinc = lancamentoVinculado.id;
+        setLancamentos((anteriores) =>
+          anteriores.filter((item) => item.id !== idVinc)
+        );
+      }
+    }
+
+    agendarDesfazer({
+      acao: 'excluido',
+      tipo: 'entrega',
+      item: encontrada,
+      lancamentoVinculado,
+      rotulo: `Entrega de ${formatarKm(encontrada.km)} km`,
     });
   };
 
@@ -415,7 +536,9 @@ export default function App() {
     novoMinLucroKm?: number,
     novaReservaKm?: number,
     novaReservaMes?: number,
-    novosVencimentos?: Vencimento[]
+    novosVencimentos?: Vencimento[],
+    novasEntregas?: Entrega[],
+    novoAltoContraste?: boolean
   ) => {
     setLancamentos(novosLancamentos);
     setTrajetos(novosTrajetos);
@@ -439,6 +562,12 @@ export default function App() {
     if (Array.isArray(novosVencimentos)) {
       handleMudarVencimentos(novosVencimentos);
     }
+    if (Array.isArray(novasEntregas)) {
+      setEntregas(novasEntregas);
+    }
+    if (typeof novoAltoContraste === 'boolean') {
+      handleMudarAltoContraste(novoAltoContraste);
+    }
     setDesfazer(null);
   };
 
@@ -450,6 +579,11 @@ export default function App() {
   const trajetosDoPeriodo = useMemo(
     () => filtrarPorPeriodo(trajetos, periodo),
     [trajetos, periodo]
+  );
+
+  const entregasDoPeriodo = useMemo(
+    () => filtrarEntregasPorPeriodo(entregas, periodo),
+    [entregas, periodo]
   );
 
   const kmEmAndamento =
@@ -467,20 +601,34 @@ export default function App() {
     [lancamentos]
   );
 
+  const entregasHoje = useMemo(
+    () => filtrarEntregasPorPeriodo(entregas, FiltroPeriodo.HOJE),
+    [entregas]
+  );
+
   const resumoHoje = useMemo(() => {
     const trajHoje = filtrarPorPeriodo(trajetos, FiltroPeriodo.HOJE);
     const ganhosLista = lancamentosHoje.filter(
       (l) => l.tipo === TipoLancamento.GANHO
     );
     const ganhos = ganhosLista.reduce((acc, l) => acc + l.valor, 0);
-    const entregas = ganhosLista.reduce(
+    const entregasQtd = ganhosLista.reduce(
       (acc, l) => acc + obterEntregasLancamento(l),
       0
     );
-    const kmEmEntregaSalvos = ganhosLista.reduce(
+    const idsLancamentoEntregas = new Set(
+      entregasHoje.map((e) => e.lancamentoId).filter(Boolean)
+    );
+    const kmEntregasRegistradasHoje = entregasHoje.reduce(
+      (acc, e) => acc + e.km,
+      0
+    );
+    const kmEmEntregaLegado = ganhosLista.reduce(
       (acc, l) =>
         acc +
-        (typeof l.kmEntrega === 'number' && l.kmEntrega > 0
+        (!idsLancamentoEntregas.has(l.id) &&
+        typeof l.kmEntrega === 'number' &&
+        l.kmEntrega > 0
           ? l.kmEntrega
           : 0),
       0
@@ -489,7 +637,8 @@ export default function App() {
       .filter((l) => l.tipo === TipoLancamento.GASTO)
       .reduce((acc, l) => acc + l.valor, 0);
     const km = trajHoje.reduce((acc, t) => acc + t.km, 0) + kmEmAndamento;
-    const kmEmEntrega = kmEmEntregaSalvos + kmEntregaEmAndamento;
+    const kmEmEntrega =
+      kmEntregasRegistradasHoje + kmEmEntregaLegado + kmEntregaEmAndamento;
     const kmDeslocamento = Math.max(0, km - kmEmEntrega);
     const tempoTotalSegundos =
       trajHoje.reduce((acc, t) => acc + (t.duracaoSegundos ?? 0), 0) +
@@ -501,11 +650,13 @@ export default function App() {
       km,
       kmEmEntrega,
       kmDeslocamento,
-      entregas,
+      temEntregaNoDia: entregasHoje.length > 0,
+      entregas: entregasQtd,
       tempoTotalSegundos,
     };
   }, [
     lancamentosHoje,
+    entregasHoje,
     trajetos,
     kmEmAndamento,
     kmEntregaEmAndamento,
@@ -714,20 +865,14 @@ export default function App() {
               </div>
             </div>
 
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-[var(--rota-line)] pt-2 text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
-              <span>
-                Em entrega:{' '}
-                <strong className="font-extrabold text-[var(--rota-text)]">
-                  {formatarKm(resumoHoje.kmEmEntrega)} km
-                </strong>
-              </span>
-              <span>
-                Deslocamento:{' '}
-                <strong className="font-extrabold text-[var(--rota-text)]">
-                  {formatarKm(resumoHoje.kmDeslocamento)} km
-                </strong>
-              </span>
-            </div>
+            {resumoHoje.temEntregaNoDia && (
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-[var(--rota-line)] pt-2 text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
+                <span>
+                  Em entrega {formatarKm(resumoHoje.kmEmEntrega)} km ·{' '}
+                  Deslocamento {formatarKm(resumoHoje.kmDeslocamento)} km
+                </span>
+              </div>
+            )}
           </section>
 
           {/* 4. Cartão Lucro por km */}
@@ -786,6 +931,8 @@ export default function App() {
           <Odometro
             oculto={abaAtiva !== 'hoje'}
             lancamentos={lancamentos}
+            entregas={entregas}
+            triggerFinalizarSeq={triggerFinalizarSeq}
             onSalvarTrajeto={handleSalvarTrajeto}
             onFinalizarEntrega={handleFinalizarEntregaOdometro}
             onStatusChange={handleOdometroStatusChange}
@@ -843,6 +990,7 @@ export default function App() {
               lancamentos={lancamentosDoPeriodo}
               todosLancamentos={lancamentos}
               trajetos={trajetosDoPeriodo}
+              entregas={entregasDoPeriodo}
               kmEmAndamento={kmEmAndamento}
               kmEntregaEmAndamento={kmEntregaEmAndamento}
               tempoEmAndamentoSegundos={tempoEmAndamentoSegundos}
@@ -852,7 +1000,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Aba 3: Histórico (exclusivo para lançamentos e trajetos) */}
+        {/* Aba 3: Histórico (exclusivo para lançamentos, entregas e trajetos) */}
         {abaAtiva === 'historico' && (
           <div role="tabpanel" className="space-y-3">
             <header>
@@ -866,9 +1014,11 @@ export default function App() {
               onMudarPeriodo={setPeriodo}
               lancamentos={lancamentosDoPeriodo}
               trajetos={trajetosDoPeriodo}
+              entregas={entregasDoPeriodo}
               onEditarLancamento={handleEditarLancamento}
               onExcluirLancamento={handleExcluirLancamento}
               onExcluirTrajeto={handleExcluirTrajeto}
+              onExcluirEntrega={handleExcluirEntrega}
             />
           </div>
         )}
@@ -885,8 +1035,11 @@ export default function App() {
             <ManutencaoBackup
               tema={tema}
               onMudarTema={handleMudarTema}
+              altoContraste={altoContraste}
+              onMudarAltoContraste={handleMudarAltoContraste}
               todosLancamentos={lancamentos}
               todosTrajetos={trajetos}
+              todasEntregas={entregas}
               metaDiaria={metaDiaria}
               onMudarMetaDiaria={handleMudarMetaDiaria}
               minLucroKm={minLucroKm}
@@ -914,28 +1067,50 @@ export default function App() {
         )}
       </main>
 
-      {/* 7. Dois botões fixos acima da barra inferior na aba Hoje */}
+      {/* 7. Botões fixos acima da barra inferior na aba Hoje (ou Finalizar entrega em movimento) */}
       {abaAtiva === 'hoje' && (
         <div className="fixed bottom-[calc(67px+env(safe-area-inset-bottom))] left-0 right-0 z-20 px-4 py-1.5 bg-[var(--rota-bg)]">
-          <div className="mx-auto grid max-w-[460px] grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() =>
-                setSheetLancamento({ aberto: true, tipo: TipoLancamento.GANHO })
-              }
-              className="flex h-[56px] items-center justify-center rounded-[16px] bg-[var(--rota-accent)] text-[16px] font-extrabold text-[var(--rota-on-accent)] active:scale-[0.98]"
-            >
-              + Ganho
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                setSheetLancamento({ aberto: true, tipo: TipoLancamento.GASTO })
-              }
-              className="flex h-[56px] items-center justify-center rounded-[16px] border-2 border-[var(--rota-line)] bg-[var(--rota-surface)] text-[16px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
-            >
-              − Gasto
-            </button>
+          <div className="mx-auto max-w-[460px]">
+            {carregarModoMovimento() &&
+            odometroInfo.status === 'running' &&
+            odometroInfo.entregaAtiva &&
+            odometroInfo.velocidadeKmh !== null &&
+            odometroInfo.velocidadeKmh >= 15 ? (
+              <button
+                type="button"
+                onClick={() => setTriggerFinalizarSeq((n) => n + 1)}
+                className="flex h-[56px] w-full items-center justify-center rounded-[16px] bg-[var(--rota-success)] text-[16px] font-extrabold text-[var(--rota-on-success)] active:scale-[0.98]"
+              >
+                Finalizar entrega
+              </button>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSheetLancamento({
+                      aberto: true,
+                      tipo: TipoLancamento.GANHO,
+                    })
+                  }
+                  className="flex h-[56px] items-center justify-center rounded-[16px] bg-[var(--rota-accent)] text-[16px] font-extrabold text-[var(--rota-on-accent)] active:scale-[0.98]"
+                >
+                  + Ganho
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSheetLancamento({
+                      aberto: true,
+                      tipo: TipoLancamento.GASTO,
+                    })
+                  }
+                  className="flex h-[56px] items-center justify-center rounded-[16px] border-2 border-[var(--rota-line)] bg-[var(--rota-surface)] text-[16px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
+                >
+                  − Gasto
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -946,7 +1121,9 @@ export default function App() {
         tipoInicial={sheetLancamento.tipo}
         lancamentos={lancamentos}
         onFechar={() => setSheetLancamento((prev) => ({ ...prev, aberto: false }))}
-        onAdicionar={handleAdicionarLancamento}
+        onAdicionar={(dados) => {
+          handleAdicionarLancamento(dados);
+        }}
       />
 
       {/* Toast flutuante para desfazer */}
@@ -960,8 +1137,9 @@ export default function App() {
           }`}
         >
           <span className="truncate text-[13px] font-bold text-[var(--rota-text)]">
-            {desfazer.acao === 'adicionado' ? 'Salvo: ' : 'Excluído: '}
-            {desfazer.rotulo}
+            {desfazer.tipo === 'entrega' && desfazer.acao === 'adicionado'
+              ? `Adicionado · ${desfazer.rotulo}`
+              : `${desfazer.acao === 'adicionado' ? 'Salvo: ' : 'Excluído: '}${desfazer.rotulo}`}
           </span>
           <button
             type="button"

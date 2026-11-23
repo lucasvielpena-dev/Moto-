@@ -49,6 +49,12 @@
           } else {
             document.documentElement.removeAttribute('data-theme');
           }
+          var contraste = localStorage.getItem('rota_contraste_v1');
+          if (contraste === 'high') {
+            document.documentElement.setAttribute('data-contrast', 'high');
+          } else {
+            document.documentElement.removeAttribute('data-contrast');
+          }
           var metaTheme = document.querySelector('meta[name="theme-color"]');
           if (metaTheme) {
             metaTheme.setAttribute(
