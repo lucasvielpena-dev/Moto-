@@ -68,7 +68,7 @@ export function obterEntregasLancamento(item: Lancamento): number {
   return 1;
 }
 
-function sanitizarLancamentos(itens: unknown[]): Lancamento[] {
+export function sanitizarLancamentos(itens: unknown[]): Lancamento[] {
   return itens
     .filter(
       (item): item is Lancamento =>
@@ -116,7 +116,7 @@ function sanitizarLancamentos(itens: unknown[]): Lancamento[] {
     }));
 }
 
-function sanitizarTrajetos(itens: unknown[]): Trajeto[] {
+export function sanitizarTrajetos(itens: unknown[]): Trajeto[] {
   return itens
     .filter(
       (item): item is Trajeto =>
@@ -163,7 +163,7 @@ function sanitizarVencimentos(itens: unknown[]): Vencimento[] {
     }));
 }
 
-function sanitizarEntregas(itens: unknown[]): Entrega[] {
+export function sanitizarEntregas(itens: unknown[]): Entrega[] {
   return itens
     .filter((item): item is Entrega => {
       if (!item || typeof item !== 'object') return false;
@@ -647,6 +647,20 @@ export function gerarId(): string {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+export interface DadosRestauracao {
+  lancamentos: Lancamento[];
+  trajetos: Trajeto[];
+  metaDiaria: number;
+  configOleo?: ConfigTrocaOleo;
+  percentualReserva?: number;
+  minLucroKm?: number;
+  reservaKm?: number;
+  reservaMes?: number;
+  vencimentos?: Vencimento[];
+  entregas?: Entrega[];
+  altoContraste?: boolean;
 }
 
 export interface BackupRota {

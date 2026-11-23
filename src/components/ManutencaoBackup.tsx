@@ -9,6 +9,7 @@ import {
 import {
   BackupRota,
   ConfigTrocaOleo,
+  DadosRestauracao,
   PreferenciaTema,
   carregarConfigOleo,
   gerarConteudoCsv,
@@ -16,6 +17,8 @@ import {
   salvarConfigOleo,
   validarEConverterBackupJson,
 } from '../utils/storage';
+
+export type { DadosRestauracao };
 import {
   SUGESTOES_VENCIMENTO,
   calcularDiasParaVencimento,
@@ -55,22 +58,27 @@ interface ManutencaoBackupProps {
   configOleoExterna?: ConfigTrocaOleo;
   onMudarConfigOleo?: (config: ConfigTrocaOleo) => void;
   resumoHoje: ResumoHojeCompartilhar;
-  onRestaurarBackup: (
-    lancamentos: Lancamento[],
-    trajetos: Trajeto[],
-    metaDiaria: number,
-    configOleo?: ConfigTrocaOleo,
-    percentualReserva?: number,
-    minLucroKm?: number,
-    reservaKm?: number,
-    reservaMes?: number,
-    vencimentos?: Vencimento[],
-    entregas?: Entrega[],
-    altoContraste?: boolean
-  ) => void;
+  onRestaurarBackup: (dados: DadosRestauracao) => void;
+}
+
+interface RotaAndroidBridge {
+  saveFile?: (filename: string, mimeType: string, content: string) => void;
+  shareText?: (text: string) => void;
+  shareFile?: (filename: string, mimeType: string, content: string) => void;
+  printPage?: () => void;
+}
+
+function obterBridgeAndroid(): RotaAndroidBridge | undefined {
+  if (typeof window === 'undefined') return undefined;
+  return (window as Window & { RotaAndroid?: RotaAndroidBridge }).RotaAndroid;
 }
 
 function baixarArquivo(conteudo: string, nomeArquivo: string, mime: string) {
+  const androidBridge = obterBridgeAndroid();
+  if (androidBridge?.saveFile) {
+    androidBridge.saveFile(nomeArquivo, mime, conteudo);
+    return;
+  }
   const blob = new Blob([conteudo], { type: mime });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -162,6 +170,7 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
     erro?: boolean;
   } | null>(null);
   const [relatorioMesAberto, setRelatorioMesAberto] = useState<boolean>(false);
+  const [backupPendente, setBackupPendente] = useState<BackupRota | null>(null);
 
   // Vencimentos UI state
   const [editandoVencimentoId, setEditandoVencimentoId] = useState<
@@ -173,6 +182,19 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
   const inputVencimentoDataRef = useRef<HTMLInputElement | null>(null);
 
   const inputRestoreRef = useRef<HTMLInputElement | null>(null);
+  const btnCancelarRestoreRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!backupPendente) return;
+    btnCancelarRestoreRef.current?.focus();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setBackupPendente(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [backupPendente]);
 
   useEffect(() => {
     setIntervaloOleoTexto(String(configOleo.intervaloKm));
@@ -387,6 +409,13 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
     const nomeArquivo = `rota-backup-${dataStr}.json`;
     const json = JSON.stringify(criarPayloadBackup(), null, 2);
 
+    const androidBridge = obterBridgeAndroid();
+    if (androidBridge?.shareFile) {
+      androidBridge.shareFile(nomeArquivo, 'application/json', json);
+      exibirMensagemBackup('Compartilhando backup...');
+      return;
+    }
+
     try {
       const arquivo = new File([json], nomeArquivo, {
         type: 'application/json',
@@ -428,6 +457,13 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
       `Lucro por km: ${lucroKmTexto}`,
     ].join('\n');
 
+    const androidBridge = obterBridgeAndroid();
+    if (androidBridge?.shareText) {
+      androidBridge.shareText(texto);
+      exibirMensagemBackup('Compartilhando resumo...');
+      return;
+    }
+
     if (
       typeof navigator !== 'undefined' &&
       typeof navigator.share === 'function'
@@ -466,29 +502,37 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
         return;
       }
 
-      onRestaurarBackup(
-        backup.lancamentos,
-        backup.trajetos,
-        backup.metaDiaria,
-        backup.configOleo,
-        backup.percentualReserva,
-        backup.minLucroKm,
-        backup.reservaKm,
-        backup.reservaMes,
-        backup.vencimentos,
-        backup.entregas,
-        backup.altoContraste
-      );
-
-      if (backup.configOleo) {
-        atualizarConfigOleo(backup.configOleo);
-        setIntervaloOleoTexto(String(backup.configOleo.intervaloKm));
-      }
-
-      exibirMensagemBackup('Dados restaurados com sucesso!');
+      setBackupPendente(backup);
     } catch {
       exibirMensagemBackup('Não foi possível ler o arquivo.', true);
     }
+  };
+
+  const handleConfirmarRestauracao = () => {
+    if (!backupPendente) return;
+    const backup = backupPendente;
+
+    onRestaurarBackup({
+      lancamentos: backup.lancamentos,
+      trajetos: backup.trajetos,
+      metaDiaria: backup.metaDiaria,
+      configOleo: backup.configOleo,
+      percentualReserva: backup.percentualReserva,
+      minLucroKm: backup.minLucroKm,
+      reservaKm: backup.reservaKm,
+      reservaMes: backup.reservaMes,
+      vencimentos: backup.vencimentos,
+      entregas: backup.entregas,
+      altoContraste: backup.altoContraste,
+    });
+
+    if (backup.configOleo) {
+      atualizarConfigOleo(backup.configOleo);
+      setIntervaloOleoTexto(String(backup.configOleo.intervaloKm));
+    }
+
+    setBackupPendente(null);
+    exibirMensagemBackup('Dados restaurados com sucesso!');
   };
 
   const vencimentosOrdenados = useMemo(
@@ -1076,6 +1120,88 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
         reservaKm={reservaKm}
         reservaMes={reservaMes}
       />
+
+      {backupPendente && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+          style={{ backgroundColor: 'var(--rota-backdrop)' }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="titulo-confirmar-restauracao"
+        >
+          <div className="w-full sm:max-w-[420px] rounded-t-[20px] sm:rounded-[20px] bg-[var(--rota-bg)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3">
+            <div className="space-y-1">
+              <h2
+                id="titulo-confirmar-restauracao"
+                className="text-[20px] font-extrabold text-[var(--rota-text)]"
+              >
+                Restaurar backup?
+              </h2>
+              <p className="text-[14px] font-semibold text-[var(--rota-text-soft)]">
+                Isso substitui os dados atuais.
+              </p>
+            </div>
+
+            <div className="rota-card p-3.5 grid grid-cols-3 divide-x divide-[var(--rota-line)] text-center tabular-nums">
+              <div className="px-2">
+                <span className="block text-[18px] font-extrabold text-[var(--rota-text)]">
+                  {backupPendente.lancamentos.length}
+                </span>
+                <span className="block text-[13px] font-semibold text-[var(--rota-text-soft)]">
+                  {backupPendente.lancamentos.length === 1
+                    ? 'lançamento'
+                    : 'lançamentos'}
+                </span>
+              </div>
+              <div className="px-2">
+                <span className="block text-[18px] font-extrabold text-[var(--rota-text)]">
+                  {backupPendente.trajetos.length}
+                </span>
+                <span className="block text-[13px] font-semibold text-[var(--rota-text-soft)]">
+                  {backupPendente.trajetos.length === 1
+                    ? 'trajeto'
+                    : 'trajetos'}
+                </span>
+              </div>
+              <div className="px-2">
+                <span className="block text-[18px] font-extrabold text-[var(--rota-text)]">
+                  {backupPendente.entregas?.length ?? 0}
+                </span>
+                <span className="block text-[13px] font-semibold text-[var(--rota-text-soft)]">
+                  {(backupPendente.entregas?.length ?? 0) === 1
+                    ? 'entrega'
+                    : 'entregas'}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                ref={btnCancelarRestoreRef}
+                type="button"
+                onClick={() => setBackupPendente(null)}
+                className="flex h-[48px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-surface)] px-4 text-[14px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSalvarBackup}
+                className="flex h-[48px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-surface-2)] px-4 text-[14px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
+              >
+                Baixar backup atual antes
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmarRestauracao}
+                className="flex h-[48px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-accent)] px-4 text-[14px] font-extrabold text-[var(--rota-on-accent)] active:scale-[0.98]"
+              >
+                Restaurar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

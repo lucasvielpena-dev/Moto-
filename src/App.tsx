@@ -26,6 +26,7 @@ import {
 } from './utils/formatters';
 import {
   ConfigTrocaOleo,
+  DadosRestauracao,
   PreferenciaTema,
   carregarAltoContraste,
   carregarConfigOleo,
@@ -449,6 +450,13 @@ export default function App() {
         lancamentoVinculado: lancamentoCriado,
         rotulo: `${rotuloCategoria(dados.plataforma!)} (${formatarMoeda(lancamentoCriado.valor)})`,
       });
+    } else {
+      agendarDesfazer({
+        acao: 'adicionado',
+        tipo: 'entrega',
+        item: novaEntrega,
+        rotulo: `Entrega de ${formatarKm(novaEntrega.km)} km`,
+      });
     }
   };
 
@@ -527,46 +535,34 @@ export default function App() {
     });
   };
 
-  const handleRestaurarBackup = (
-    novosLancamentos: Lancamento[],
-    novosTrajetos: Trajeto[],
-    novaMetaDiaria: number,
-    novaConfigOleo?: ConfigTrocaOleo,
-    novoPercentualReserva?: number,
-    novoMinLucroKm?: number,
-    novaReservaKm?: number,
-    novaReservaMes?: number,
-    novosVencimentos?: Vencimento[],
-    novasEntregas?: Entrega[],
-    novoAltoContraste?: boolean
-  ) => {
-    setLancamentos(novosLancamentos);
-    setTrajetos(novosTrajetos);
-    setMetaDiaria(novaMetaDiaria);
-    salvarMetaDiaria(novaMetaDiaria);
-    if (novaConfigOleo) {
-      handleMudarConfigOleo(novaConfigOleo);
+  const handleRestaurarBackup = (dados: DadosRestauracao) => {
+    setLancamentos(dados.lancamentos);
+    setTrajetos(dados.trajetos);
+    setMetaDiaria(dados.metaDiaria);
+    salvarMetaDiaria(dados.metaDiaria);
+    if (dados.configOleo) {
+      handleMudarConfigOleo(dados.configOleo);
     }
-    if (typeof novoPercentualReserva === 'number') {
-      handleMudarPercentualReserva(novoPercentualReserva);
+    if (typeof dados.percentualReserva === 'number') {
+      handleMudarPercentualReserva(dados.percentualReserva);
     }
-    if (typeof novoMinLucroKm === 'number') {
-      handleMudarMinLucroKm(novoMinLucroKm);
+    if (typeof dados.minLucroKm === 'number') {
+      handleMudarMinLucroKm(dados.minLucroKm);
     }
-    if (typeof novaReservaKm === 'number') {
-      handleMudarReservaKm(novaReservaKm);
+    if (typeof dados.reservaKm === 'number') {
+      handleMudarReservaKm(dados.reservaKm);
     }
-    if (typeof novaReservaMes === 'number') {
-      handleMudarReservaMes(novaReservaMes);
+    if (typeof dados.reservaMes === 'number') {
+      handleMudarReservaMes(dados.reservaMes);
     }
-    if (Array.isArray(novosVencimentos)) {
-      handleMudarVencimentos(novosVencimentos);
+    if (Array.isArray(dados.vencimentos)) {
+      handleMudarVencimentos(dados.vencimentos);
     }
-    if (Array.isArray(novasEntregas)) {
-      setEntregas(novasEntregas);
+    if (Array.isArray(dados.entregas)) {
+      setEntregas(dados.entregas);
     }
-    if (typeof novoAltoContraste === 'boolean') {
-      handleMudarAltoContraste(novoAltoContraste);
+    if (typeof dados.altoContraste === 'boolean') {
+      handleMudarAltoContraste(dados.altoContraste);
     }
     setDesfazer(null);
   };

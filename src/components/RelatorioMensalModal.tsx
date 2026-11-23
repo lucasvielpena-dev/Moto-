@@ -260,7 +260,18 @@ export const RelatorioMensalModal: React.FC<RelatorioMensalModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={() => {
+                const androidBridge = (
+                  window as Window & {
+                    RotaAndroid?: { printPage?: () => void };
+                  }
+                ).RotaAndroid;
+                if (androidBridge?.printPage) {
+                  androidBridge.printPage();
+                } else {
+                  window.print();
+                }
+              }}
               className="inline-flex min-h-[48px] items-center gap-2 rounded-[14px] bg-[var(--rota-accent)] px-4 text-[14px] font-extrabold text-[var(--rota-on-accent)] active:scale-[0.98]"
             >
               <Printer className="h-4 w-4 shrink-0" aria-hidden="true" />

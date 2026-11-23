@@ -16,3 +16,12 @@
 local.properties
 .env
 debug.keystore
+node_modules
+dist
+dev-dist
+*.keystore
+*.jks
+android/app/build
+android/build
+android/.gradle
+android/local.properties
