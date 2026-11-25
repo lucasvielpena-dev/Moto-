@@ -21,6 +21,7 @@ import {
   rotuloCategoria,
 } from '../utils/formatters';
 import { obterEntregasLancamento } from '../utils/storage';
+import { useNativeBackHandler } from '../utils/nativeBack';
 
 interface ListaLancamentosProps {
   periodo: FiltroPeriodo;
@@ -67,6 +68,26 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
   const [editEntregasTexto, setEditEntregasTexto] = useState<string>('1');
   const [editObs, setEditObs] = useState<string>('');
   const [editErro, setEditErro] = useState<string | null>(null);
+
+  useNativeBackHandler(Boolean(itemEditando), () => setItemEditando(null));
+  useNativeBackHandler(Boolean(entregaConfirmandoExcluir), () =>
+    setEntregaConfirmandoExcluir(null)
+  );
+
+  useEffect(() => {
+    if (!itemEditando && !entregaConfirmandoExcluir) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (entregaConfirmandoExcluir) {
+          setEntregaConfirmandoExcluir(null);
+        } else if (itemEditando) {
+          setItemEditando(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [itemEditando, entregaConfirmandoExcluir]);
 
   useEffect(() => {
     setMostrarTodos(false);
@@ -373,13 +394,17 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
       {/* Modal de edição */}
       {itemEditando && (
         <div
+          onClick={() => setItemEditando(null)}
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
           style={{ backgroundColor: 'var(--rota-backdrop)' }}
           role="dialog"
           aria-modal="true"
           aria-labelledby="titulo-editar-lancamento"
         >
-          <div className="w-full sm:max-w-[460px] rounded-t-[20px] sm:rounded-[20px] bg-[var(--rota-bg)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[92dvh] overflow-y-auto w-full sm:max-w-[460px] rounded-t-[20px] sm:rounded-[20px] bg-[var(--rota-bg)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3"
+          >
             <div className="flex items-center justify-between gap-3">
               <h2
                 id="titulo-editar-lancamento"
@@ -452,6 +477,7 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
                       <button
                         key={cat}
                         type="button"
+                        aria-pressed={ativo}
                         onClick={() => setEditCategoria(cat)}
                         className={`h-[48px] rounded-[14px] border-2 px-3 text-[14px] font-bold truncate transition-colors ${
                           ativo
@@ -553,13 +579,17 @@ export const ListaLancamentos: React.FC<ListaLancamentosProps> = ({
       {/* Confirmação de exclusão de entrega */}
       {entregaConfirmandoExcluir && (
         <div
+          onClick={() => setEntregaConfirmandoExcluir(null)}
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
           style={{ backgroundColor: 'var(--rota-backdrop)' }}
           role="dialog"
           aria-modal="true"
           aria-labelledby="titulo-excluir-entrega"
         >
-          <div className="w-full sm:max-w-[420px] rounded-t-[20px] sm:rounded-[20px] bg-[var(--rota-bg)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full sm:max-w-[420px] rounded-t-[20px] sm:rounded-[20px] bg-[var(--rota-bg)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3"
+          >
             <h2
               id="titulo-excluir-entrega"
               className="text-[18px] font-extrabold text-[var(--rota-text)]"

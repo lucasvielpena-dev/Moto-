@@ -10,6 +10,7 @@ import {
 } from '../types';
 import { formatarKm, formatarMoeda, rotuloCategoria } from '../utils/formatters';
 import { obterEntregasLancamento } from '../utils/storage';
+import { useNativeBackHandler } from '../utils/nativeBack';
 
 interface RelatorioMensalModalProps {
   aberto: boolean;
@@ -221,6 +222,8 @@ export const RelatorioMensalModal: React.FC<RelatorioMensalModalProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [aberto, onFechar]);
+
+  useNativeBackHandler(aberto, onFechar);
 
   if (!aberto || typeof document === 'undefined') {
     return null;

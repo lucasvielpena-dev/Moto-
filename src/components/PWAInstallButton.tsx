@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { Download, ExternalLink, MoreVertical, Share } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
@@ -7,7 +8,7 @@ export const PWAInstallButton: React.FC = () => {
     usePWAInstall();
   const [showGuide, setShowGuide] = useState(false);
 
-  if (isInstalled) {
+  if (Capacitor.isNativePlatform() || isInstalled) {
     return null;
   }
 

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { App as CapApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { BarChart3, Clock, Home, SlidersHorizontal } from 'lucide-react';
 import { FormLancamento } from './components/FormLancamento';
 import { ListaLancamentos } from './components/ListaLancamentos';
@@ -6,6 +8,10 @@ import { ManutencaoBackup } from './components/ManutencaoBackup';
 import { Odometro, DadosEntregaFinalizada } from './components/Odometro';
 import { Resumo } from './components/Resumo';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
+import {
+  executarBackHandlerModalAberto,
+  useNativeBackHandler,
+} from './utils/nativeBack';
 import {
   CategoriaGasto,
   Entrega,
@@ -235,6 +241,26 @@ export default function App() {
     } catch {
       // Ignore malformed URLs safely
     }
+  }, []);
+
+  useNativeBackHandler(sheetLancamento.aberto, () => {
+    setSheetLancamento((anterior) => ({ ...anterior, aberto: false }));
+  });
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let listenerHandle: { remove: () => Promise<void> } | null = null;
+    void CapApp.addListener('backButton', () => {
+      if (executarBackHandlerModalAberto()) {
+        return;
+      }
+      void CapApp.minimizeApp();
+    }).then((handle) => {
+      listenerHandle = handle;
+    });
+    return () => {
+      void listenerHandle?.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -738,7 +764,7 @@ export default function App() {
                 )}
 
                 {odometroInfo.status === 'running' && (
-                  <span className="inline-flex min-h-[32px] shrink-0 items-center gap-1.5 rounded-full bg-[var(--rota-success-tint)] px-2.5 py-1 text-[13px] font-extrabold text-[var(--rota-success)]">
+                  <span className="inline-flex min-h-[32px] shrink-0 items-center gap-1.5 rounded-[10px] bg-[var(--rota-success-tint)] px-2.5 py-1 text-[13px] font-extrabold text-[var(--rota-success)]">
                     <span
                       className="h-2 w-2 rounded-full bg-[var(--rota-success)]"
                       aria-hidden="true"
@@ -944,35 +970,56 @@ export default function App() {
                 Nenhum lançamento hoje
               </div>
             ) : (
-              <ul className="divide-y divide-[var(--rota-line)]">
-                {ultimosDoisLancamentos.map((item) => {
-                  const ehGanho = item.tipo === TipoLancamento.GANHO;
-                  return (
-                    <li
-                      key={item.id}
-                      className="flex h-[56px] items-center justify-between gap-3 px-4"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <span className="block truncate text-[15px] font-bold text-[var(--rota-text)]">
-                          {rotuloCategoria(item.categoria)}
-                        </span>
-                      </div>
-                      <span className="shrink-0 text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
-                        {formatarHora(item.data)}
-                      </span>
-                      <span
-                        className={`shrink-0 text-[15px] font-extrabold tabular-nums ${
-                          ehGanho
-                            ? 'text-[var(--rota-success)]'
-                            : 'text-[var(--rota-danger)]'
-                        }`}
+              <>
+                <ul className="divide-y divide-[var(--rota-line)]">
+                  {ultimosDoisLancamentos.map((item) => {
+                    const ehGanho = item.tipo === TipoLancamento.GANHO;
+                    const qtdEntregas = ehGanho
+                      ? obterEntregasLancamento(item)
+                      : 0;
+                    return (
+                      <li
+                        key={item.id}
+                        className="flex min-h-[56px] items-center justify-between gap-3 px-4 py-2"
                       >
-                        {ehGanho ? '+' : '−'} {formatarMoeda(item.valor)}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
+                        <div className="min-w-0 flex-1">
+                          <span className="block truncate text-[15px] font-bold text-[var(--rota-text)]">
+                            {rotuloCategoria(item.categoria)}
+                          </span>
+                          {(qtdEntregas > 1 || item.observacao) && (
+                            <span className="block truncate text-[13px] font-semibold text-[var(--rota-text-soft)]">
+                              {qtdEntregas > 1 ? `${qtdEntregas} entregas` : ''}
+                              {qtdEntregas > 1 && item.observacao ? ' · ' : ''}
+                              {item.observacao ?? ''}
+                            </span>
+                          )}
+                        </div>
+                        <span className="shrink-0 text-[13px] font-semibold text-[var(--rota-text-soft)] tabular-nums">
+                          {formatarHora(item.data)}
+                        </span>
+                        <span
+                          className={`shrink-0 text-[15px] font-extrabold tabular-nums ${
+                            ehGanho
+                              ? 'text-[var(--rota-success)]'
+                              : 'text-[var(--rota-danger)]'
+                          }`}
+                        >
+                          {ehGanho ? '+' : '−'} {formatarMoeda(item.valor)}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {lancamentosHoje.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => handleTrocarAba('historico')}
+                    className="flex min-h-[48px] w-full items-center justify-center border-t border-[var(--rota-line)] px-4 text-[13px] font-extrabold text-[var(--rota-accent)] active:scale-[0.99]"
+                  >
+                    Ver todos de hoje ({lancamentosHoje.length})
+                  </button>
+                )}
+              </>
             )}
           </section>
         </div>

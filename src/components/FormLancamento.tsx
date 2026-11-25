@@ -8,6 +8,7 @@ import {
   TipoLancamento,
 } from '../types';
 import { parseValorNumerico, rotuloCategoria } from '../utils/formatters';
+import { useNativeBackHandler } from '../utils/nativeBack';
 
 interface FormLancamentoProps {
   aberto: boolean;
@@ -88,6 +89,19 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
     }
   }, [aberto, tipoInicial, plataformasOrdenadas, categoriasGastoOrdenadas]);
 
+  useNativeBackHandler(aberto, onFechar);
+
+  useEffect(() => {
+    if (!aberto) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onFechar();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [aberto, onFechar]);
+
   if (!aberto) {
     return null;
   }
@@ -129,13 +143,17 @@ export const FormLancamento: React.FC<FormLancamentoProps> = ({
 
   return (
     <div
+      onClick={onFechar}
       className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center"
       style={{ backgroundColor: 'var(--rota-backdrop)' }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="titulo-novo-lancamento"
     >
-      <div className="flex h-[100dvh] sm:h-auto sm:max-h-[92dvh] w-full sm:max-w-[460px] flex-col bg-[var(--rota-bg)] sm:rounded-[20px] sm:overflow-hidden">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex h-[100dvh] sm:h-auto sm:max-h-[92dvh] w-full sm:max-w-[460px] flex-col bg-[var(--rota-bg)] sm:rounded-[20px] sm:overflow-hidden"
+      >
         <header className="flex items-center justify-between gap-3 px-4 pt-3 pb-2">
           <h2
             id="titulo-novo-lancamento"

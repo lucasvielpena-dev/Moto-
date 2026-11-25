@@ -4,4 +4,7 @@
     <string name="title_activity_main">Rota</string>
     <string name="package_name">com.rota.entregadores</string>
     <string name="custom_url_scheme">com.rota.entregadores</string>
+    <string name="capacitor_background_geolocation_notification_channel_name">Odômetro Rota</string>
+    <string name="capacitor_background_geolocation_notification_icon">drawable/ic_notification_rota</string>
+    <string name="capacitor_background_geolocation_notification_color">#1D5FD1</string>
 </resources>

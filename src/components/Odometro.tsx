@@ -1,4 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { App as CapApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
+import {
+  BackgroundGeolocation,
+  type Location as CapgoLocation,
+} from '@capgo/background-geolocation';
 import {
   Entrega,
   Lancamento,
@@ -27,6 +33,7 @@ import {
   salvarTempoOdometroSegundos,
   salvarUltimoKmPainel,
 } from '../utils/storage';
+import { useNativeBackHandler } from '../utils/nativeBack';
 
 export interface DadosEntregaFinalizada {
   inicioIso: string;
@@ -74,11 +81,56 @@ interface ErroGeolocalizacaoState {
   ocorreuEm: string;
   bloqueadoPorIframe?: boolean;
   podeTentarNovamente?: boolean;
+  podeAbrirConfiguracoes?: boolean;
 }
 
 const PRECISAO_MAXIMA_METROS = 40;
 const DESLOCAMENTO_MINIMO_METROS = 5;
 const SALTO_MAXIMO_KM = 2;
+const LIMITE_SILENCIO_GPS_NATIVO_MS = 60_000;
+
+function converterLocationNativaParaGeolocationPosition(
+  loc: CapgoLocation
+): GeolocationPosition {
+  const coords: GeolocationCoordinates = {
+    latitude: loc.latitude,
+    longitude: loc.longitude,
+    accuracy:
+      typeof loc.accuracy === 'number' && Number.isFinite(loc.accuracy)
+        ? loc.accuracy
+        : Number.NaN,
+    altitude: typeof loc.altitude === 'number' ? loc.altitude : null,
+    altitudeAccuracy:
+      typeof loc.altitudeAccuracy === 'number' ? loc.altitudeAccuracy : null,
+    heading: typeof loc.bearing === 'number' ? loc.bearing : null,
+    speed: typeof loc.speed === 'number' ? loc.speed : null,
+    toJSON() {
+      return {
+        latitude: this.latitude,
+        longitude: this.longitude,
+        accuracy: this.accuracy,
+        altitude: this.altitude,
+        altitudeAccuracy: this.altitudeAccuracy,
+        heading: this.heading,
+        speed: this.speed,
+      };
+    },
+  };
+  const timestamp =
+    typeof loc.time === 'number' && Number.isFinite(loc.time)
+      ? loc.time
+      : Date.now();
+  return {
+    coords,
+    timestamp,
+    toJSON() {
+      return {
+        coords: this.coords.toJSON(),
+        timestamp: this.timestamp,
+      };
+    },
+  };
+}
 
 function registrarLogErroGps(registro: ErroGeolocalizacaoState, codeNum?: number) {
   console.error('[Rota · Monitoramento GPS] Falha na geolocalização:', {
@@ -206,6 +258,8 @@ export const Odometro: React.FC<OdometroProps> = ({
   } | null>(null);
   const [confirmarCancelarEntrega, setConfirmarCancelarEntrega] =
     useState<boolean>(false);
+  const [confirmarDescartarTurno, setConfirmarDescartarTurno] =
+    useState<boolean>(false);
   const [entregaPlataforma, setEntregaPlataforma] = useState<Plataforma>(
     Plataforma.IFOOD
   );
@@ -218,6 +272,8 @@ export const Odometro: React.FC<OdometroProps> = ({
   const [aguardandoSinal, setAguardandoSinal] = useState<boolean>(false);
   const [wakeLockAtivo, setWakeLockAtivo] = useState<boolean>(false);
   const [erroGps, setErroGps] = useState<ErroGeolocalizacaoState | null>(null);
+  const [modalPermissaoBgAberto, setModalPermissaoBgAberto] =
+    useState<boolean>(false);
 
   const [modoManual, setModoManual] = useState<'distancia' | 'painel'>('distancia');
   const [kmManualTexto, setKmManualTexto] = useState<string>('');
@@ -229,12 +285,47 @@ export const Odometro: React.FC<OdometroProps> = ({
   const [erroManual, setErroManual] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
+  const ehNativo = Capacitor.isNativePlatform();
   const watchIdRef = useRef<number | null>(null);
+  const nativoWatchAtivoRef = useRef<boolean>(false);
   const ultimoPontoRef = useRef<Coordenada | null>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const statusRef = useRef<StatusOdometro>(status);
   const kmAtualRef = useRef<number>(kmAtual);
+  const tempoSegundosRef = useRef<number>(tempoSegundos);
+  const baseSegundosRef = useRef<number>(tempoSegundos);
+  const inicioSegmentoMsRef = useRef<number | null>(null);
+  const ultimaLeituraGpsMsRef = useRef<number | null>(null);
+  const bgPermissaoDispensadaRef = useRef<boolean>(false);
   const ultimoTriggerSeqRef = useRef<number>(triggerFinalizarSeq);
+
+  useNativeBackHandler(modalPermissaoBgAberto, () =>
+    setModalPermissaoBgAberto(false)
+  );
+  useNativeBackHandler(sheetAberto, () => setSheetAberto(false));
+  useNativeBackHandler(modalEntregaAberto, () => setModalEntregaAberto(false));
+
+  useEffect(() => {
+    if (!modalPermissaoBgAberto && !modalEntregaAberto && !sheetAberto) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (modalPermissaoBgAberto) {
+        setModalPermissaoBgAberto(false);
+      } else if (modalEntregaAberto) {
+        setModalEntregaAberto(false);
+      } else if (sheetAberto) {
+        setSheetAberto(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [modalPermissaoBgAberto, modalEntregaAberto, sheetAberto]);
+
+  useEffect(() => {
+    if (!sheetAberto) {
+      setConfirmarDescartarTurno(false);
+    }
+  }, [sheetAberto]);
 
   const ultimaPlataformaUsada = useMemo<Plataforma>(() => {
     let melhorPlat: Plataforma = Plataforma.IFOOD;
@@ -313,13 +404,65 @@ export const Odometro: React.FC<OdometroProps> = ({
     onStatusChange,
   ]);
 
+  const sincronizarTempoPorTimestamp = useCallback((): number => {
+    if (
+      statusRef.current === 'running' &&
+      inicioSegmentoMsRef.current !== null
+    ) {
+      const decorridos = Math.max(
+        0,
+        Math.floor((Date.now() - inicioSegmentoMsRef.current) / 1000)
+      );
+      const total = baseSegundosRef.current + decorridos;
+      if (total !== tempoSegundosRef.current) {
+        tempoSegundosRef.current = total;
+        setTempoSegundos(total);
+        salvarTempoOdometroSegundos(total);
+      }
+      return total;
+    }
+    return tempoSegundosRef.current;
+  }, []);
+
+  const verificarAtrasoGpsNativo = useCallback(() => {
+    if (
+      !ehNativo ||
+      statusRef.current !== 'running' ||
+      ultimaLeituraGpsMsRef.current === null
+    ) {
+      return;
+    }
+    if (Date.now() - ultimaLeituraGpsMsRef.current > LIMITE_SILENCIO_GPS_NATIVO_MS) {
+      setErroGps((anterior) => {
+        if (
+          anterior?.codigo === 'TIMEOUT' &&
+          anterior?.mensagem === 'Sem sinal de GPS' &&
+          anterior?.podeAbrirConfiguracoes
+        ) {
+          return anterior;
+        }
+        return {
+          codigo: 'TIMEOUT',
+          mensagem: 'Sem sinal de GPS',
+          sugestao:
+            'Se a tela está apagada, libere a localização o tempo todo e a bateria sem restrição para o Rota nas configurações do Android',
+          ocorreuEm: new Date().toISOString(),
+          podeTentarNovamente: true,
+          podeAbrirConfiguracoes: true,
+        };
+      });
+    }
+  }, [ehNativo]);
+
   useEffect(() => {
     if (status !== 'running') return;
+    sincronizarTempoPorTimestamp();
     const timer = window.setInterval(() => {
-      setTempoSegundos((anterior) => anterior + 1);
+      sincronizarTempoPorTimestamp();
+      verificarAtrasoGpsNativo();
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [status]);
+  }, [status, sincronizarTempoPorTimestamp, verificarAtrasoGpsNativo]);
 
   const mostrarFeedback = (msg: string) => {
     setFeedback(msg);
@@ -367,49 +510,63 @@ export const Odometro: React.FC<OdometroProps> = ({
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
+    if (nativoWatchAtivoRef.current) {
+      nativoWatchAtivoRef.current = false;
+      void BackgroundGeolocation.stop().catch(() => {
+        // Ignora falha ao parar se serviço já estiver parado
+      });
+    }
+    ultimaLeituraGpsMsRef.current = null;
     ultimoPontoRef.current = null;
     setAguardandoSinal(false);
   }, []);
 
-  const processarPosicaoGps = useCallback((posicao: GeolocationPosition) => {
-    const { latitude, longitude, accuracy, speed } = posicao.coords;
+  const processarPosicaoGps = useCallback(
+    (posicao: GeolocationPosition) => {
+      sincronizarTempoPorTimestamp();
+      const { latitude, longitude, accuracy, speed } = posicao.coords;
 
-    if (!Number.isFinite(accuracy)) return;
-    setPrecisaoMetros(Math.round(accuracy));
-    if (typeof speed === 'number' && Number.isFinite(speed) && speed >= 0) {
-      setVelocidadeKmh(Math.round(speed * 3.6));
-    }
+      if (!Number.isFinite(accuracy)) return;
+      setPrecisaoMetros(Math.round(accuracy));
+      if (typeof speed === 'number' && Number.isFinite(speed) && speed >= 0) {
+        setVelocidadeKmh(Math.round(speed * 3.6));
+      }
 
-    if (accuracy > PRECISAO_MAXIMA_METROS) {
-      return;
-    }
+      if (accuracy > PRECISAO_MAXIMA_METROS) {
+        return;
+      }
 
-    setAguardandoSinal(false);
-    setErroGps(null);
-    const novoPonto: Coordenada = { lat: latitude, lon: longitude };
+      setAguardandoSinal(false);
+      setErroGps(null);
+      const novoPonto: Coordenada = { lat: latitude, lon: longitude };
 
-    if (!ultimoPontoRef.current) {
+      if (!ultimoPontoRef.current) {
+        ultimoPontoRef.current = novoPonto;
+        return;
+      }
+
+      const distanciaKm = calcularDistanciaHaversineKm(
+        ultimoPontoRef.current,
+        novoPonto
+      );
+      const distanciaMetros = distanciaKm * 1000;
+
+      if (distanciaMetros < DESLOCAMENTO_MINIMO_METROS) {
+        return;
+      }
+
+      if (distanciaKm > SALTO_MAXIMO_KM) {
+        return;
+      }
+
+      const proximoKm = kmAtualRef.current + distanciaKm;
+      kmAtualRef.current = proximoKm;
+      salvarKmEmAndamento(proximoKm);
+      setKmAtual(proximoKm);
       ultimoPontoRef.current = novoPonto;
-      return;
-    }
-
-    const distanciaKm = calcularDistanciaHaversineKm(
-      ultimoPontoRef.current,
-      novoPonto
-    );
-    const distanciaMetros = distanciaKm * 1000;
-
-    if (distanciaMetros < DESLOCAMENTO_MINIMO_METROS) {
-      return;
-    }
-
-    if (distanciaKm > SALTO_MAXIMO_KM) {
-      return;
-    }
-
-    setKmAtual((anterior) => anterior + distanciaKm);
-    ultimoPontoRef.current = novoPonto;
-  }, []);
+    },
+    [sincronizarTempoPorTimestamp]
+  );
 
   const tratarErroWatchGps = useCallback(
     (erro: GeolocationPositionError) => {
@@ -422,13 +579,118 @@ export const Odometro: React.FC<OdometroProps> = ({
       if (registroErro.codigo === 'PERMISSION_DENIED') {
         pararWatchGps();
         void liberarWakeLock();
-        setStatus(kmAtualRef.current > 0 ? 'paused' : 'idle');
+        const total = sincronizarTempoPorTimestamp();
+        baseSegundosRef.current = total;
+        inicioSegmentoMsRef.current = null;
+        statusRef.current = kmAtualRef.current > 0 ? 'paused' : 'idle';
+        setStatus(statusRef.current);
       }
     },
-    [liberarWakeLock, pararWatchGps]
+    [liberarWakeLock, pararWatchGps, sincronizarTempoPorTimestamp]
   );
 
+  const iniciarWatchGpsNativo = useCallback(async () => {
+    pararWatchGps();
+    setErroGps(null);
+    setAguardandoSinal(true);
+    baseSegundosRef.current = tempoSegundosRef.current;
+    inicioSegmentoMsRef.current = Date.now();
+    ultimaLeituraGpsMsRef.current = Date.now();
+    statusRef.current = 'running';
+    setStatus('running');
+    nativoWatchAtivoRef.current = true;
+
+    try {
+      await BackgroundGeolocation.start(
+        {
+          backgroundTitle: 'Rota · odômetro ativo',
+          backgroundMessage: 'Contando km mesmo com a tela apagada.',
+          requestPermissions: false,
+          stale: false,
+          distanceFilter: 0,
+          networkFallback: false,
+        },
+        (location, error) => {
+          if (error) {
+            const autorizadoErro =
+              error.code === 'NOT_AUTHORIZED' ||
+              error.code === 'PERMISSION_DENIED';
+            setAguardandoSinal(false);
+            const registro: ErroGeolocalizacaoState = autorizadoErro
+              ? {
+                  codigo: 'PERMISSION_DENIED',
+                  mensagem: 'Permissão de acesso à localização foi negada.',
+                  sugestao:
+                    'Libere a localização para o Rota nas configurações do Android para contar km em segundo plano.',
+                  mensagemOriginal: error.message,
+                  ocorreuEm: new Date().toISOString(),
+                  podeTentarNovamente: true,
+                  podeAbrirConfiguracoes: true,
+                }
+              : {
+                  codigo: 'POSITION_UNAVAILABLE',
+                  mensagem: 'Posição GPS indisponível no momento.',
+                  sugestao:
+                    'Verifique se o GPS do celular está ativo e tente novamente.',
+                  mensagemOriginal: error.message,
+                  ocorreuEm: new Date().toISOString(),
+                  podeTentarNovamente: true,
+                  podeAbrirConfiguracoes: true,
+                };
+            registrarLogErroGps(registro);
+            setErroGps(registro);
+            if (autorizadoErro) {
+              pararWatchGps();
+              const total = sincronizarTempoPorTimestamp();
+              baseSegundosRef.current = total;
+              inicioSegmentoMsRef.current = null;
+              statusRef.current = kmAtualRef.current > 0 ? 'paused' : 'idle';
+              setStatus(statusRef.current);
+            }
+            return;
+          }
+
+          if (
+            location &&
+            Number.isFinite(location.latitude) &&
+            Number.isFinite(location.longitude)
+          ) {
+            ultimaLeituraGpsMsRef.current = Date.now();
+            processarPosicaoGps(
+              converterLocationNativaParaGeolocationPosition(location)
+            );
+          }
+        }
+      );
+    } catch (err) {
+      nativoWatchAtivoRef.current = false;
+      ultimaLeituraGpsMsRef.current = null;
+      const total = sincronizarTempoPorTimestamp();
+      baseSegundosRef.current = total;
+      inicioSegmentoMsRef.current = null;
+      statusRef.current = kmAtualRef.current > 0 ? 'paused' : 'idle';
+      setStatus(statusRef.current);
+      setAguardandoSinal(false);
+      setErroGps({
+        codigo: 'POSITION_UNAVAILABLE',
+        mensagem: 'Não foi possível iniciar o GPS em segundo plano.',
+        sugestao:
+          'Verifique as permissões de localização e bateria do Rota nas configurações do Android.',
+        mensagemOriginal: err instanceof Error ? err.message : undefined,
+        ocorreuEm: new Date().toISOString(),
+        podeTentarNovamente: true,
+        podeAbrirConfiguracoes: true,
+      });
+      setSheetAberto(true);
+    }
+  }, [pararWatchGps, processarPosicaoGps, sincronizarTempoPorTimestamp]);
+
   const iniciarWatchGps = useCallback(() => {
+    if (ehNativo) {
+      void iniciarWatchGpsNativo();
+      return;
+    }
+
     if (typeof window !== 'undefined' && !window.isSecureContext) {
       const registroErro: ErroGeolocalizacaoState = {
         codigo: 'INSECURE_CONTEXT',
@@ -440,7 +702,8 @@ export const Odometro: React.FC<OdometroProps> = ({
       registrarLogErroGps(registroErro);
       setErroGps(registroErro);
       setSheetAberto(true);
-      setStatus(kmAtualRef.current > 0 ? 'paused' : 'idle');
+      statusRef.current = kmAtualRef.current > 0 ? 'paused' : 'idle';
+      setStatus(statusRef.current);
       return;
     }
 
@@ -455,13 +718,17 @@ export const Odometro: React.FC<OdometroProps> = ({
       registrarLogErroGps(registroErro);
       setErroGps(registroErro);
       setSheetAberto(true);
-      setStatus(kmAtualRef.current > 0 ? 'paused' : 'idle');
+      statusRef.current = kmAtualRef.current > 0 ? 'paused' : 'idle';
+      setStatus(statusRef.current);
       return;
     }
 
     pararWatchGps();
     setErroGps(null);
     setAguardandoSinal(true);
+    baseSegundosRef.current = tempoSegundosRef.current;
+    inicioSegmentoMsRef.current = Date.now();
+    statusRef.current = 'running';
     setStatus('running');
 
     watchIdRef.current = navigator.geolocation.watchPosition(
@@ -473,7 +740,7 @@ export const Odometro: React.FC<OdometroProps> = ({
         timeout: 15000,
       }
     );
-  }, [pararWatchGps, processarPosicaoGps, tratarErroWatchGps]);
+  }, [ehNativo, iniciarWatchGpsNativo, pararWatchGps, processarPosicaoGps, tratarErroWatchGps]);
 
   useEffect(() => {
     let permissionStatus: PermissionStatus | null = null;
@@ -496,43 +763,136 @@ export const Odometro: React.FC<OdometroProps> = ({
     }
 
     const handleVisibilityChange = () => {
-      if (
-        document.visibilityState === 'visible' &&
-        statusRef.current === 'running'
-      ) {
-        void solicitarWakeLock();
+      if (document.visibilityState === 'visible') {
+        sincronizarTempoPorTimestamp();
+        verificarAtrasoGpsNativo();
+        if (!ehNativo && statusRef.current === 'running') {
+          void solicitarWakeLock();
+        }
       }
     };
+
+    let appStateHandle: { remove: () => Promise<void> } | null = null;
+    if (ehNativo) {
+      void CapApp.addListener('appStateChange', ({ isActive }) => {
+        if (isActive) {
+          sincronizarTempoPorTimestamp();
+          verificarAtrasoGpsNativo();
+        }
+      }).then((handle) => {
+        appStateHandle = handle;
+      });
+    }
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      void appStateHandle?.remove();
       permissionStatus?.removeEventListener('change', handlePermChange);
       pararWatchGps();
       void liberarWakeLock();
     };
-  }, [liberarWakeLock, pararWatchGps, solicitarWakeLock]);
+  }, [
+    ehNativo,
+    liberarWakeLock,
+    pararWatchGps,
+    sincronizarTempoPorTimestamp,
+    solicitarWakeLock,
+    verificarAtrasoGpsNativo,
+  ]);
 
-  const handleIniciarOuContinuar = () => {
+  const handleIniciarOuContinuar = async () => {
     setAvisoTrajeto(null);
-    iniciarWatchGps();
-    void solicitarWakeLock();
+    if (!ehNativo) {
+      iniciarWatchGps();
+      void solicitarWakeLock();
+      return;
+    }
+
+    try {
+      let perm = await BackgroundGeolocation.checkPermissions();
+      if (perm.location !== 'granted') {
+        perm = await BackgroundGeolocation.requestPermissions({
+          permissions: ['location', 'notification'],
+        });
+      } else if (perm.notification === 'prompt') {
+        perm = await BackgroundGeolocation.requestPermissions({
+          permissions: ['notification'],
+        });
+      }
+
+      if (perm.location !== 'granted') {
+        setErroGps({
+          codigo: 'PERMISSION_DENIED',
+          mensagem: 'Permissão de acesso à localização foi negada.',
+          sugestao:
+            'Libere o acesso à localização nas configurações do Android para usar o odômetro.',
+          ocorreuEm: new Date().toISOString(),
+          podeTentarNovamente: true,
+          podeAbrirConfiguracoes: true,
+        });
+        setSheetAberto(true);
+        return;
+      }
+
+      if (
+        perm.backgroundLocation !== 'granted' &&
+        !bgPermissaoDispensadaRef.current
+      ) {
+        setModalPermissaoBgAberto(true);
+        return;
+      }
+    } catch {
+      // Fallback para tentar iniciar diretamente caso checkPermissions falhe
+    }
+
+    await iniciarWatchGpsNativo();
+  };
+
+  const handleConfirmarPermissaoBackground = async () => {
+    setModalPermissaoBgAberto(false);
+    try {
+      const atual = await BackgroundGeolocation.checkPermissions();
+      if (atual.backgroundLocation === 'denied') {
+        await BackgroundGeolocation.openSettings();
+      } else {
+        await BackgroundGeolocation.requestPermissions({
+          permissions: ['backgroundLocation'],
+        });
+      }
+    } catch {
+      // Usuário pode continuar mesmo se o diálogo falhar
+    }
+    bgPermissaoDispensadaRef.current = true;
+    await iniciarWatchGpsNativo();
+  };
+
+  const handleDispensarPermissaoBackground = () => {
+    setModalPermissaoBgAberto(false);
+    bgPermissaoDispensadaRef.current = true;
+    void iniciarWatchGpsNativo();
   };
 
   const handlePausar = () => {
+    const total = sincronizarTempoPorTimestamp();
+    baseSegundosRef.current = total;
+    inicioSegmentoMsRef.current = null;
+    salvarTempoOdometroSegundos(total);
     pararWatchGps();
     void liberarWakeLock();
+    statusRef.current = 'paused';
     setStatus('paused');
   };
 
   const handleIniciarEntrega = () => {
     if (status !== 'running') return;
+    const tempoAgora = sincronizarTempoPorTimestamp();
     setAvisoTrajeto(null);
     setConfirmarCancelarEntrega(false);
     setEntregaAtiva({
       inicioIso: new Date().toISOString(),
-      kmInicial: kmAtual,
-      segundosInicial: tempoSegundos,
+      kmInicial: kmAtualRef.current,
+      segundosInicial: tempoAgora,
     });
   };
 
@@ -556,13 +916,17 @@ export const Odometro: React.FC<OdometroProps> = ({
 
   const handleAbrirModalEntrega = useCallback(() => {
     if (!entregaAtiva) return;
+    const tempoAgora = sincronizarTempoPorTimestamp();
     const snapshot = {
       inicioIso: entregaAtiva.inicioIso,
       fimIso: new Date().toISOString(),
-      km: Math.max(0, Number((kmAtual - entregaAtiva.kmInicial).toFixed(2))),
+      km: Math.max(
+        0,
+        Number((kmAtualRef.current - entregaAtiva.kmInicial).toFixed(2))
+      ),
       duracaoSegundos: Math.max(
         0,
-        Math.floor(tempoSegundos - entregaAtiva.segundosInicial)
+        Math.floor(tempoAgora - entregaAtiva.segundosInicial)
       ),
     };
 
@@ -670,19 +1034,27 @@ export const Odometro: React.FC<OdometroProps> = ({
       return;
     }
     setAvisoTrajeto(null);
+    const tempoFinal = sincronizarTempoPorTimestamp();
     const kmParaSalvar = Number(kmAtual.toFixed(2));
     pararWatchGps();
     void liberarWakeLock();
     onSalvarTrajeto(
       kmParaSalvar > 0 ? kmParaSalvar : kmAtual,
       'gps',
-      tempoSegundos > 0 ? tempoSegundos : undefined
+      tempoFinal > 0 ? tempoFinal : undefined
     );
+    kmAtualRef.current = 0;
+    tempoSegundosRef.current = 0;
+    baseSegundosRef.current = 0;
+    inicioSegmentoMsRef.current = null;
+    salvarKmEmAndamento(0);
+    salvarTempoOdometroSegundos(0);
     setKmAtual(0);
     setTempoSegundos(0);
     setPrecisaoMetros(null);
     setVelocidadeKmh(null);
     setErroGps(null);
+    statusRef.current = 'idle';
     setStatus('idle');
     setSheetAberto(false);
     mostrarFeedback('Turno encerrado!');
@@ -691,6 +1063,12 @@ export const Odometro: React.FC<OdometroProps> = ({
   const handleZerar = () => {
     pararWatchGps();
     void liberarWakeLock();
+    kmAtualRef.current = 0;
+    tempoSegundosRef.current = 0;
+    baseSegundosRef.current = 0;
+    inicioSegmentoMsRef.current = null;
+    salvarKmEmAndamento(0);
+    salvarTempoOdometroSegundos(0);
     setKmAtual(0);
     setTempoSegundos(0);
     setEntregaAtiva(null);
@@ -698,10 +1076,12 @@ export const Odometro: React.FC<OdometroProps> = ({
     setFinalizandoSnapshot(null);
     setModalEntregaAberto(false);
     setConfirmarCancelarEntrega(false);
+    setConfirmarDescartarTurno(false);
     setAvisoTrajeto(null);
     setPrecisaoMetros(null);
     setVelocidadeKmh(null);
     setErroGps(null);
+    statusRef.current = 'idle';
     setStatus('idle');
   };
 
@@ -831,7 +1211,7 @@ export const Odometro: React.FC<OdometroProps> = ({
                 if (status === 'running') {
                   handlePausar();
                 } else {
-                  handleIniciarOuContinuar();
+                  void handleIniciarOuContinuar();
                 }
               }}
               className={`inline-flex h-[48px] min-w-[92px] sm:min-w-[100px] shrink-0 items-center justify-center rounded-[14px] px-3 text-[14px] font-extrabold whitespace-nowrap active:scale-[0.98] ${
@@ -847,6 +1227,45 @@ export const Odometro: React.FC<OdometroProps> = ({
                   : 'Iniciar'}
             </button>
           </div>
+
+          {erroGps && (
+            <div
+              role="alert"
+              onClick={(e) => e.stopPropagation()}
+              className="rounded-[14px] bg-[var(--rota-danger-tint)] p-3 space-y-2"
+            >
+              <p className="text-[14px] font-extrabold text-[var(--rota-danger)]">
+                {erroGps.mensagem}
+              </p>
+              <p className="text-[13px] font-semibold text-[var(--rota-text)]">
+                {erroGps.sugestao}
+              </p>
+              <div className="flex flex-wrap gap-2 pt-0.5">
+                {ehNativo && erroGps.podeAbrirConfiguracoes && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void BackgroundGeolocation.openSettings();
+                    }}
+                    className="inline-flex min-h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-accent)] px-4 text-[14px] font-extrabold text-[var(--rota-on-accent)]"
+                  >
+                    Abrir configurações
+                  </button>
+                )}
+                {erroGps.podeTentarNovamente && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleIniciarOuContinuar();
+                    }}
+                    className="inline-flex min-h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-surface)] px-4 text-[14px] font-extrabold text-[var(--rota-text)]"
+                  >
+                    Tentar novamente
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           <div
             className="border-t border-[var(--rota-line)] pt-2.5 space-y-2"
@@ -945,13 +1364,17 @@ export const Odometro: React.FC<OdometroProps> = ({
       {/* Bottom sheet de detalhes do odômetro */}
       {sheetAberto && (
         <div
+          onClick={() => setSheetAberto(false)}
           className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center"
           style={{ backgroundColor: 'var(--rota-backdrop)' }}
           role="dialog"
           aria-modal="true"
           aria-labelledby="titulo-odometro-sheet"
         >
-          <div className="max-h-[92dvh] w-full sm:max-w-[460px] overflow-y-auto rounded-t-[20px] sm:rounded-[20px] bg-[var(--rota-bg)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[92dvh] w-full sm:max-w-[460px] overflow-y-auto rounded-t-[20px] sm:rounded-[20px] bg-[var(--rota-bg)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3"
+          >
             <div className="flex items-center justify-between gap-3">
               <h2
                 id="titulo-odometro-sheet"
@@ -1010,6 +1433,17 @@ export const Odometro: React.FC<OdometroProps> = ({
                     {erroGps.sugestao}
                   </p>
                   <div className="flex flex-wrap gap-2 pt-1">
+                    {ehNativo && erroGps.podeAbrirConfiguracoes && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void BackgroundGeolocation.openSettings();
+                        }}
+                        className="inline-flex min-h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-accent)] px-4 text-[14px] font-extrabold text-[var(--rota-on-accent)]"
+                      >
+                        Abrir configurações
+                      </button>
+                    )}
                     {erroGps.bloqueadoPorIframe &&
                       typeof window !== 'undefined' && (
                         <a
@@ -1024,7 +1458,9 @@ export const Odometro: React.FC<OdometroProps> = ({
                     {erroGps.podeTentarNovamente && (
                       <button
                         type="button"
-                        onClick={handleIniciarOuContinuar}
+                        onClick={() => {
+                          void handleIniciarOuContinuar();
+                        }}
                         className="inline-flex min-h-[48px] items-center justify-center rounded-[14px] bg-[var(--rota-surface)] px-4 text-[14px] font-extrabold text-[var(--rota-text)]"
                       >
                         Tentar novamente
@@ -1041,7 +1477,9 @@ export const Odometro: React.FC<OdometroProps> = ({
                     onClick={
                       status === 'running'
                         ? handlePausar
-                        : handleIniciarOuContinuar
+                        : () => {
+                            void handleIniciarOuContinuar();
+                          }
                     }
                     className={`flex h-[48px] items-center justify-center rounded-[14px] px-3 text-[15px] font-extrabold whitespace-nowrap active:scale-[0.98] ${
                       status === 'running'
@@ -1071,13 +1509,37 @@ export const Odometro: React.FC<OdometroProps> = ({
                 </div>
 
                 {status === 'paused' && (kmAtual > 0 || tempoSegundos > 0) && (
-                  <button
-                    type="button"
-                    onClick={handleZerar}
-                    className="flex h-[48px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-danger-tint)] px-4 text-[14px] font-extrabold text-[var(--rota-danger)] active:scale-[0.98]"
-                  >
-                    Descartar turno atual
-                  </button>
+                  !confirmarDescartarTurno ? (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmarDescartarTurno(true)}
+                      className="flex h-[48px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-danger-tint)] px-4 text-[14px] font-extrabold text-[var(--rota-danger)] active:scale-[0.98]"
+                    >
+                      Descartar turno atual
+                    </button>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2 rounded-[14px] bg-[var(--rota-danger-tint)] px-3 py-1.5">
+                      <span className="text-[13px] font-bold text-[var(--rota-danger)]">
+                        Descartar turno?
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setConfirmarDescartarTurno(false)}
+                          className="inline-flex h-[48px] items-center justify-center rounded-[12px] bg-[var(--rota-surface)] px-3 text-[13px] font-bold text-[var(--rota-text)] active:scale-[0.98]"
+                        >
+                          Voltar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleZerar}
+                          className="inline-flex h-[48px] items-center justify-center rounded-[12px] bg-[var(--rota-danger)] px-3 text-[13px] font-extrabold text-white active:scale-[0.98]"
+                        >
+                          Sim, descartar
+                        </button>
+                      </div>
+                    </div>
+                  )
                 )}
               </div>
 
@@ -1322,13 +1784,17 @@ export const Odometro: React.FC<OdometroProps> = ({
       {/* Bottom sheet "Entrega finalizada" */}
       {modalEntregaAberto && finalizandoSnapshot && (
         <div
+          onClick={() => setModalEntregaAberto(false)}
           className="fixed inset-0 z-[60] flex flex-col justify-end sm:items-center sm:justify-center"
           style={{ backgroundColor: 'var(--rota-backdrop)' }}
           role="dialog"
           aria-modal="true"
           aria-labelledby="titulo-finalizar-entrega"
         >
-          <div className="max-h-[92dvh] w-full sm:max-w-[460px] overflow-y-auto rounded-t-[20px] sm:rounded-[20px] bg-[var(--rota-bg)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[92dvh] w-full sm:max-w-[460px] overflow-y-auto rounded-t-[20px] sm:rounded-[20px] bg-[var(--rota-bg)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3"
+          >
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h3
@@ -1429,6 +1895,52 @@ export const Odometro: React.FC<OdometroProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Modal explicativo da segunda etapa de permissão (localização em segundo plano) */}
+      {modalPermissaoBgAberto && (
+        <div
+          onClick={() => setModalPermissaoBgAberto(false)}
+          className="fixed inset-0 z-[65] flex items-end sm:items-center justify-center"
+          style={{ backgroundColor: 'var(--rota-backdrop)' }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="titulo-permissao-bg"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full sm:max-w-[420px] rounded-t-[20px] sm:rounded-[20px] bg-[var(--rota-bg)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3"
+          >
+            <h2
+              id="titulo-permissao-bg"
+              className="text-[20px] font-extrabold text-[var(--rota-text)]"
+            >
+              Localização o tempo todo
+            </h2>
+            <p className="text-[14px] font-semibold text-[var(--rota-text-soft)] leading-relaxed">
+              Para o odômetro continuar contando km com a tela apagada e com
+              outros apps abertos, permita a localização &ldquo;o tempo todo&rdquo;
+              para o Rota.
+            </p>
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  void handleConfirmarPermissaoBackground();
+                }}
+                className="flex h-[48px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-accent)] px-4 text-[14px] font-extrabold text-[var(--rota-on-accent)] active:scale-[0.98]"
+              >
+                Permitir o tempo todo
+              </button>
+              <button
+                type="button"
+                onClick={handleDispensarPermissaoBackground}
+                className="flex h-[48px] w-full items-center justify-center rounded-[14px] bg-[var(--rota-surface-2)] px-4 text-[14px] font-extrabold text-[var(--rota-text)] active:scale-[0.98]"
+              >
+                Agora não
+              </button>
+            </div>
           </div>
         </div>
       )}

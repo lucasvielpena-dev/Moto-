@@ -14,8 +14,13 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.6.2",
+    "@capacitor/app": "^8.1.2",
     "@capacitor/cli": "^8.6.2",
     "@capacitor/core": "^8.6.2",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/geolocation": "^8.2.5",
+    "@capacitor/share": "^8.0.3",
+    "@capgo/background-geolocation": "^8.6.5",
     "@fontsource/nunito": "^5.3.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",

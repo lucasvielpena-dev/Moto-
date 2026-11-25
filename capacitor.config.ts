@@ -10,6 +10,7 @@ const config: CapacitorConfig = {
   android: {
     backgroundColor: '#0B0F17',
     allowMixedContent: false,
+    useLegacyBridge: true,
   },
 };
 

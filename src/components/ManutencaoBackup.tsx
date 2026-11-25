@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import { Pencil, Printer, Share2, Trash2 } from 'lucide-react';
 import { Entrega, Lancamento, Trajeto, Vencimento } from '../types';
 import {
@@ -24,6 +27,7 @@ import {
   calcularDiasParaVencimento,
   formatarDataVencimento,
 } from '../utils/vencimentos';
+import { useNativeBackHandler } from '../utils/nativeBack';
 import { PWAInstallButton } from './PWAInstallButton';
 import { RelatorioMensalModal } from './RelatorioMensalModal';
 
@@ -73,11 +77,56 @@ function obterBridgeAndroid(): RotaAndroidBridge | undefined {
   return (window as Window & { RotaAndroid?: RotaAndroidBridge }).RotaAndroid;
 }
 
-function baixarArquivo(conteudo: string, nomeArquivo: string, mime: string) {
+async function salvarArquivoNativo(
+  conteudo: string,
+  nomeArquivo: string
+): Promise<'saved' | 'shared' | 'error'> {
+  try {
+    await Filesystem.writeFile({
+      path: nomeArquivo,
+      data: conteudo,
+      directory: Directory.Documents,
+      encoding: Encoding.UTF8,
+      recursive: true,
+    });
+    return 'saved';
+  } catch {
+    try {
+      await Filesystem.writeFile({
+        path: nomeArquivo,
+        data: conteudo,
+        directory: Directory.Cache,
+        encoding: Encoding.UTF8,
+        recursive: true,
+      });
+      const { uri } = await Filesystem.getUri({
+        path: nomeArquivo,
+        directory: Directory.Cache,
+      });
+      await Share.share({
+        title: nomeArquivo,
+        files: [uri],
+        dialogTitle: 'Salvar arquivo',
+      });
+      return 'shared';
+    } catch {
+      return 'error';
+    }
+  }
+}
+
+async function baixarArquivo(
+  conteudo: string,
+  nomeArquivo: string,
+  mime: string
+): Promise<'saved' | 'shared' | 'error'> {
+  if (Capacitor.isNativePlatform()) {
+    return salvarArquivoNativo(conteudo, nomeArquivo);
+  }
   const androidBridge = obterBridgeAndroid();
   if (androidBridge?.saveFile) {
     androidBridge.saveFile(nomeArquivo, mime, conteudo);
-    return;
+    return 'saved';
   }
   const blob = new Blob([conteudo], { type: mime });
   const url = URL.createObjectURL(blob);
@@ -88,6 +137,7 @@ function baixarArquivo(conteudo: string, nomeArquivo: string, mime: string) {
   link.click();
   document.body.removeChild(link);
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return 'saved';
 }
 
 async function copiarTextoAreaTransferencia(texto: string): Promise<boolean> {
@@ -179,10 +229,13 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
   const [vencimentoNome, setVencimentoNome] = useState<string>('');
   const [vencimentoData, setVencimentoData] = useState<string>('');
   const [erroVencimento, setErroVencimento] = useState<string | null>(null);
+  const inputVencimentoNomeRef = useRef<HTMLInputElement | null>(null);
   const inputVencimentoDataRef = useRef<HTMLInputElement | null>(null);
 
   const inputRestoreRef = useRef<HTMLInputElement | null>(null);
   const btnCancelarRestoreRef = useRef<HTMLButtonElement | null>(null);
+
+  useNativeBackHandler(Boolean(backupPendente), () => setBackupPendente(null));
 
   useEffect(() => {
     if (!backupPendente) return;
@@ -370,7 +423,7 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
     trajetos: todosTrajetos,
   });
 
-  const handleExportarCsv = () => {
+  const handleExportarCsv = async () => {
     if (
       todosLancamentos.length === 0 &&
       todosTrajetos.length === 0 &&
@@ -385,29 +438,79 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
       todosTrajetos,
       todasEntregas
     );
-    baixarArquivo(
+    const resultado = await baixarArquivo(
       csv,
       `rota-relatorio-${dataStr}.csv`,
       'text/csv;charset=utf-8;'
     );
-    exibirMensagemBackup('Planilha CSV baixada!');
+    if (resultado === 'error') {
+      exibirMensagemBackup('Não foi possível exportar o CSV.', true);
+    } else if (Capacitor.isNativePlatform() && resultado === 'saved') {
+      exibirMensagemBackup('Planilha CSV salva em Documentos!');
+    } else {
+      exibirMensagemBackup('Planilha CSV baixada!');
+    }
   };
 
-  const handleSalvarBackup = () => {
+  const handleSalvarBackup = async () => {
     const dataStr = new Date().toISOString().slice(0, 10);
     const payload = criarPayloadBackup();
-    baixarArquivo(
+    const resultado = await baixarArquivo(
       JSON.stringify(payload, null, 2),
       `rota-backup-${dataStr}.json`,
       'application/json'
     );
-    exibirMensagemBackup('Backup salvo no aparelho!');
+    if (resultado === 'error') {
+      exibirMensagemBackup('Não foi possível salvar o backup.', true);
+    } else if (Capacitor.isNativePlatform() && resultado === 'saved') {
+      exibirMensagemBackup('Backup salvo em Documentos!');
+    } else {
+      exibirMensagemBackup('Backup salvo no aparelho!');
+    }
   };
 
   const handleCompartilharBackup = async () => {
     const dataStr = new Date().toISOString().slice(0, 10);
     const nomeArquivo = `rota-backup-${dataStr}.json`;
     const json = JSON.stringify(criarPayloadBackup(), null, 2);
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await Filesystem.writeFile({
+          path: nomeArquivo,
+          data: json,
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8,
+          recursive: true,
+        });
+        const { uri } = await Filesystem.getUri({
+          path: nomeArquivo,
+          directory: Directory.Cache,
+        });
+        await Share.share({
+          title: 'Backup Rota',
+          files: [uri],
+          dialogTitle: 'Compartilhar backup',
+        });
+        exibirMensagemBackup('Backup compartilhado!');
+        return;
+      } catch (err) {
+        if (
+          err instanceof Error &&
+          (err.name === 'AbortError' ||
+            err.message.toLowerCase().includes('cancel'))
+        ) {
+          return;
+        }
+        const fallback = await salvarArquivoNativo(json, nomeArquivo);
+        if (fallback !== 'error') {
+          exibirMensagemBackup('Backup salvo em Documentos!');
+          return;
+        }
+        exibirMensagemBackup('Não foi possível compartilhar o backup.', true);
+        return;
+      }
+    }
 
     const androidBridge = obterBridgeAndroid();
     if (androidBridge?.shareFile) {
@@ -439,7 +542,7 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
       }
     }
 
-    baixarArquivo(json, nomeArquivo, 'application/json');
+    await baixarArquivo(json, nomeArquivo, 'application/json');
     exibirMensagemBackup('Backup baixado no aparelho!');
   };
 
@@ -456,6 +559,26 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
       `Entregas: ${resumoHoje.entregas}`,
       `Lucro por km: ${lucroKmTexto}`,
     ].join('\n');
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await Share.share({
+          title: 'Resumo Rota',
+          text: texto,
+          dialogTitle: 'Compartilhar resumo do dia',
+        });
+        exibirMensagemBackup('Resumo compartilhado!');
+        return;
+      } catch (err) {
+        if (
+          err instanceof Error &&
+          (err.name === 'AbortError' ||
+            err.message.toLowerCase().includes('cancel'))
+        ) {
+          return;
+        }
+      }
+    }
 
     const androidBridge = obterBridgeAndroid();
     if (androidBridge?.shareText) {
@@ -557,6 +680,13 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
     setVencimentoNome(item.nome);
     setVencimentoData(item.dataVencimento);
     setErroVencimento(null);
+    window.setTimeout(() => {
+      inputVencimentoNomeRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+      inputVencimentoNomeRef.current?.focus();
+    }, 30);
   };
 
   const handleSalvarVencimento = (e: React.FormEvent) => {
@@ -895,6 +1025,7 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
               </label>
               <div className="rota-input flex h-[48px] items-center px-3">
                 <input
+                  ref={inputVencimentoNomeRef}
                   id="input-vencimento-nome"
                   type="text"
                   maxLength={40}
@@ -1123,13 +1254,17 @@ export const ManutencaoBackup: React.FC<ManutencaoBackupProps> = ({
 
       {backupPendente && (
         <div
+          onClick={() => setBackupPendente(null)}
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
           style={{ backgroundColor: 'var(--rota-backdrop)' }}
           role="dialog"
           aria-modal="true"
           aria-labelledby="titulo-confirmar-restauracao"
         >
-          <div className="w-full sm:max-w-[420px] rounded-t-[20px] sm:rounded-[20px] bg-[var(--rota-bg)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full sm:max-w-[420px] rounded-t-[20px] sm:rounded-[20px] bg-[var(--rota-bg)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3"
+          >
             <div className="space-y-1">
               <h2
                 id="titulo-confirmar-restauracao"
